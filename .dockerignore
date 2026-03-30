@@ -1,0 +1,13 @@
+.git
+.gitignore
+.agents
+.local
+node_modules
+**/node_modules
+**/dist
+artifacts/**/dist
+lib/**/dist
+*.log
+coverage
+.DS_Store
+Thumbs.db

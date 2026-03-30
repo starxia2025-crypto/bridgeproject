@@ -1,0 +1,30 @@
+FROM node:24-bookworm-slim AS build
+WORKDIR /app
+
+RUN corepack enable
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY tsconfig.json tsconfig.base.json ./
+COPY artifacts/helpdesk ./artifacts/helpdesk
+COPY lib ./lib
+COPY attached_assets ./attached_assets
+
+RUN pnpm install --frozen-lockfile
+
+ARG PORT=4173
+ARG BASE_PATH=/
+ARG VITE_API_BASE_URL=
+
+ENV PORT=$PORT
+ENV BASE_PATH=$BASE_PATH
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV NODE_ENV=production
+
+RUN pnpm --filter @workspace/helpdesk run build
+
+FROM nginx:1.27-alpine
+
+COPY docker/nginx/web.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/artifacts/helpdesk/dist/public /usr/share/nginx/html
+
+EXPOSE 80

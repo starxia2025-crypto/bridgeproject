@@ -9,6 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { LifeBuoy, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useEffect } from "react";
+import { buildApiUrl } from "@/lib/api-base-url";
 
 const loginSchema = z.object({
   email: z.string().email("Introduce un correo electrónico válido"),
@@ -52,7 +53,7 @@ export default function Login() {
   }
 
   function handleMicrosoftLogin() {
-    window.location.href = `${import.meta.env.BASE_URL}api/auth/microsoft`.replace('//', '/');
+    window.location.href = buildApiUrl("/api/auth/microsoft");
   }
 
   if (isUserLoading || user) return null;
