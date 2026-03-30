@@ -9,7 +9,7 @@ COPY artifacts/helpdesk ./artifacts/helpdesk
 COPY lib ./lib
 COPY attached_assets ./attached_assets
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 ARG PORT=4173
 ARG BASE_PATH=/
