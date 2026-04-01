@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Search, Plus, Building2, Users, Ticket } from "lucide-react";
+import { Search, Plus, Building2, Users, Ticket, Link as LinkIcon } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { useForm } from "react-hook-form";
@@ -21,15 +21,52 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { toast } from "@/hooks/use-toast";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+
+const sidebarPalette = [
+  { label: "Azul Macmillan", value: "#0f172a" },
+  { label: "Azul profundo", value: "#172554" },
+  { label: "Verde aula", value: "#14532d" },
+  { label: "Granate", value: "#7f1d1d" },
+  { label: "Gris oscuro", value: "#1f2937" },
+  { label: "Blanco", value: "#ffffff" },
+];
+
+const textPalette = [
+  { label: "Blanco", value: "#ffffff" },
+  { label: "Crema", value: "#f8fafc" },
+  { label: "Azul noche", value: "#0f172a" },
+  { label: "Negro", value: "#111827" },
+];
 
 const createTenantSchema = z.object({
   name: z.string().trim().min(2, "Indica el nombre del cliente"),
   slug: z.string().trim().min(2, "Indica un slug").regex(/^[a-z0-9-]+$/, "Usa solo minusculas, numeros y guiones"),
   contactEmail: z.union([z.literal(""), z.string().trim().email("Introduce un email valido")]).optional(),
   primaryColor: z.union([z.literal(""), z.string().trim().regex(/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/, "Usa un color hexadecimal valido")]).optional(),
+  sidebarBackgroundColor: z.string().min(1, "Selecciona un color para el menu"),
+  sidebarTextColor: z.string().min(1, "Selecciona un color de texto"),
+  quickLinksText: z.string().optional(),
 });
 
 type CreateTenantValues = z.infer<typeof createTenantSchema>;
+
+function parseQuickLinks(rawText: string | undefined) {
+  if (!rawText?.trim()) return [];
+
+  return rawText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [label, url, icon] = line.split("|").map((part) => part.trim());
+      if (!label || !url || !icon) {
+        throw new Error("Cada acceso directo debe seguir el formato Nombre | URL | Icono");
+      }
+      return { label, url, icon };
+    });
+}
 
 export default function ClientsAdmin() {
   const { data: currentUser } = useGetMe();
@@ -55,8 +92,14 @@ export default function ClientsAdmin() {
       slug: "",
       contactEmail: "",
       primaryColor: "#2563eb",
+      sidebarBackgroundColor: "#0f172a",
+      sidebarTextColor: "#ffffff",
+      quickLinksText: "",
     },
   });
+
+  const sidebarBackgroundColor = form.watch("sidebarBackgroundColor");
+  const sidebarTextColor = form.watch("sidebarTextColor");
 
   const createTenant = useCreateTenant({
     mutation: {
@@ -71,6 +114,9 @@ export default function ClientsAdmin() {
           slug: "",
           contactEmail: "",
           primaryColor: "#2563eb",
+          sidebarBackgroundColor: "#0f172a",
+          sidebarTextColor: "#ffffff",
+          quickLinksText: "",
         });
         await refetch();
       },
@@ -95,14 +141,27 @@ export default function ClientsAdmin() {
       return;
     }
 
-    createTenant.mutate({
-      data: {
-        name: values.name.trim(),
-        slug: values.slug.trim().toLowerCase(),
-        ...(values.contactEmail ? { contactEmail: values.contactEmail.trim().toLowerCase() } : {}),
-        ...(values.primaryColor ? { primaryColor: values.primaryColor.trim() } : {}),
-      },
-    });
+    try {
+      const quickLinks = parseQuickLinks(values.quickLinksText);
+
+      createTenant.mutate({
+        data: {
+          name: values.name.trim(),
+          slug: values.slug.trim().toLowerCase(),
+          ...(values.contactEmail ? { contactEmail: values.contactEmail.trim().toLowerCase() } : {}),
+          ...(values.primaryColor ? { primaryColor: values.primaryColor.trim() } : {}),
+          sidebarBackgroundColor: values.sidebarBackgroundColor,
+          sidebarTextColor: values.sidebarTextColor,
+          quickLinks,
+        } as any,
+      });
+    } catch (error) {
+      toast({
+        title: "Accesos directos no validos",
+        description: error instanceof Error ? error.message : "Revisa el formato de los accesos directos.",
+        variant: "destructive",
+      });
+    }
   }
 
   return (
@@ -120,57 +179,136 @@ export default function ClientsAdmin() {
                 Anadir cliente
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-3xl">
               <DialogHeader>
                 <DialogTitle>Alta y configuracion de cliente</DialogTitle>
-                <DialogDescription>Crea un nuevo grupo educativo o cliente para empezar a configurarlo.</DialogDescription>
+                <DialogDescription>Crea un nuevo grupo educativo, elige los colores del menu lateral y define accesos directos para su equipo.</DialogDescription>
               </DialogHeader>
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <FormField
+                      control={form.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nombre</FormLabel>
+                          <FormControl><Input placeholder="Ej. Grupo Escolar Norte" {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="slug"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Slug</FormLabel>
+                          <FormControl><Input placeholder="grupo-escolar-norte" {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <FormField
+                      control={form.control}
+                      name="contactEmail"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email de contacto</FormLabel>
+                          <FormControl><Input placeholder="soporte@cliente.es" {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="primaryColor"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Color principal</FormLabel>
+                          <FormControl><Input placeholder="#2563eb" {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <FormField
+                      control={form.control}
+                      name="sidebarBackgroundColor"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Fondo del menu lateral</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Selecciona un color" /></SelectTrigger></FormControl>
+                            <SelectContent>
+                              {sidebarPalette.map((color) => (
+                                <SelectItem key={color.value} value={color.value}>{color.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="sidebarTextColor"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Color del texto del menu</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Selecciona un color" /></SelectTrigger></FormControl>
+                            <SelectContent>
+                              {textPalette.map((color) => (
+                                <SelectItem key={color.value} value={color.value}>{color.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="rounded-2xl border p-4">
+                    <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
+                      <LinkIcon className="h-4 w-4" />
+                      Vista previa del menu lateral
+                    </div>
+                    <div className="rounded-xl p-4" style={{ backgroundColor: sidebarBackgroundColor, color: sidebarTextColor }}>
+                      <div className="mb-3 text-sm font-semibold opacity-80">Centro de ayuda</div>
+                      <div className="space-y-2 text-sm">
+                        <div className="rounded-md px-3 py-2" style={{ backgroundColor: `${sidebarTextColor}22` }}>Tickets de consulta</div>
+                        <div className="rounded-md px-3 py-2">Miembros del equipo</div>
+                        <div className="mt-4 border-t border-white/20 pt-3 text-base font-bold">{form.watch("name") || "Nombre del cliente"}</div>
+                      </div>
+                    </div>
+                  </div>
+
                   <FormField
                     control={form.control}
-                    name="name"
+                    name="quickLinksText"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Nombre</FormLabel>
-                        <FormControl><Input placeholder="Ej. Grupo Escolar Norte" {...field} /></FormControl>
+                        <FormLabel>Accesos directos</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            className="min-h-[140px]"
+                            placeholder={"Una linea por acceso directo. Formato: Nombre | URL | Icono\nEjemplo: MEE Platform | https://mee.example.com | https://cdn.simpleicons.org/googleclassroom"}
+                            {...field}
+                          />
+                        </FormControl>
+                        <p className="text-xs text-slate-500">El icono puede ser una URL de imagen pequena. Estos accesos se mostraran como iconos con tooltip en el menu lateral.</p>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={form.control}
-                    name="slug"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Slug</FormLabel>
-                        <FormControl><Input placeholder="grupo-escolar-norte" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="contactEmail"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email de contacto</FormLabel>
-                        <FormControl><Input placeholder="soporte@cliente.es" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="primaryColor"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Color principal</FormLabel>
-                        <FormControl><Input placeholder="#2563eb" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+
                   <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
                     <Button type="submit" disabled={createTenant.isPending}>

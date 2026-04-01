@@ -13,6 +13,13 @@ const createTenantSchema = z.object({
   slug: z.string().min(2).regex(/^[a-z0-9-]+$/),
   contactEmail: z.string().email().nullable().optional(),
   primaryColor: z.string().nullable().optional(),
+  sidebarBackgroundColor: z.string().nullable().optional(),
+  sidebarTextColor: z.string().nullable().optional(),
+  quickLinks: z.array(z.object({
+    label: z.string().min(1),
+    url: z.string().url(),
+    icon: z.string().min(1),
+  })).optional(),
 });
 
 const updateTenantSchema = z.object({
@@ -20,6 +27,13 @@ const updateTenantSchema = z.object({
   contactEmail: z.string().email().nullable().optional(),
   active: z.boolean().optional(),
   primaryColor: z.string().nullable().optional(),
+  sidebarBackgroundColor: z.string().nullable().optional(),
+  sidebarTextColor: z.string().nullable().optional(),
+  quickLinks: z.array(z.object({
+    label: z.string().min(1),
+    url: z.string().url(),
+    icon: z.string().min(1),
+  })).optional(),
   logoUrl: z.string().nullable().optional(),
 });
 
@@ -88,6 +102,18 @@ router.post("/", requireAuth, requireRole("superadmin", "tecnico", "manager"), a
 
     if (parsed.data.primaryColor !== undefined) {
       insertValues["primaryColor"] = parsed.data.primaryColor ?? null;
+    }
+
+    if (parsed.data.sidebarBackgroundColor !== undefined) {
+      insertValues["sidebarBackgroundColor"] = parsed.data.sidebarBackgroundColor ?? null;
+    }
+
+    if (parsed.data.sidebarTextColor !== undefined) {
+      insertValues["sidebarTextColor"] = parsed.data.sidebarTextColor ?? null;
+    }
+
+    if (parsed.data.quickLinks !== undefined) {
+      insertValues["quickLinks"] = parsed.data.quickLinks;
     }
 
     const tenant = await db.insert(tenantsTable).values(insertValues as any).returning();

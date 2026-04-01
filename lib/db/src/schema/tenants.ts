@@ -1,4 +1,4 @@
-import { pgTable, serial, text, boolean, timestamp, integer, varchar } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, boolean, timestamp, varchar, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -12,6 +12,9 @@ export const tenantsTable = pgTable("tenants", {
   active: boolean("active").notNull().default(true),
   logoUrl: text("logo_url"),
   primaryColor: varchar("primary_color", { length: 20 }),
+  sidebarBackgroundColor: varchar("sidebar_background_color", { length: 20 }),
+  sidebarTextColor: varchar("sidebar_text_color", { length: 20 }),
+  quickLinks: jsonb("quick_links").$type<Array<{ label: string; url: string; icon: string }>>().default([]),
   contactEmail: varchar("contact_email", { length: 255 }),
   supportEmail: varchar("support_email", { length: 255 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),

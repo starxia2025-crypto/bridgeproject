@@ -23,14 +23,29 @@ const loginSchema = z.object({
 async function buildUserResponse(user: typeof usersTable.$inferSelect) {
   let tenantName: string | null = null;
   let tenantSlug: string | null = null;
+  let tenantPrimaryColor: string | null = null;
+  let tenantSidebarBackgroundColor: string | null = null;
+  let tenantSidebarTextColor: string | null = null;
+  let tenantQuickLinks: Array<{ label: string; url: string; icon: string }> = [];
   if (user.tenantId) {
     const tenants = await db
-      .select({ name: tenantsTable.name, slug: tenantsTable.slug })
+      .select({
+        name: tenantsTable.name,
+        slug: tenantsTable.slug,
+        primaryColor: tenantsTable.primaryColor,
+        sidebarBackgroundColor: tenantsTable.sidebarBackgroundColor,
+        sidebarTextColor: tenantsTable.sidebarTextColor,
+        quickLinks: tenantsTable.quickLinks,
+      })
       .from(tenantsTable)
       .where(eq(tenantsTable.id, user.tenantId))
       .limit(1);
     tenantName = tenants[0]?.name ?? null;
     tenantSlug = tenants[0]?.slug ?? null;
+    tenantPrimaryColor = tenants[0]?.primaryColor ?? null;
+    tenantSidebarBackgroundColor = tenants[0]?.sidebarBackgroundColor ?? null;
+    tenantSidebarTextColor = tenants[0]?.sidebarTextColor ?? null;
+    tenantQuickLinks = tenants[0]?.quickLinks ?? [];
   }
   return {
     id: user.id,
@@ -40,6 +55,10 @@ async function buildUserResponse(user: typeof usersTable.$inferSelect) {
     tenantId: user.tenantId ?? null,
     tenantName,
     tenantSlug,
+    tenantPrimaryColor,
+    tenantSidebarBackgroundColor,
+    tenantSidebarTextColor,
+    tenantQuickLinks,
     active: user.active,
     createdAt: user.createdAt,
   };
