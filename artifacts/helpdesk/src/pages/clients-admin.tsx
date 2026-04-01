@@ -74,6 +74,20 @@ function createEmptyQuickLink(): QuickLinkDraft {
   };
 }
 
+function inferQuickLinkLabel(url: string) {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, "");
+    const firstSegment = hostname.split(".")[0] || hostname;
+    return firstSegment
+      .split(/[-_]/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  } catch {
+    return "";
+  }
+}
+
 export default function ClientsAdmin() {
   const { data: currentUser } = useGetMe();
   const [search, setSearch] = useState("");
@@ -147,18 +161,22 @@ export default function ClientsAdmin() {
       const normalizedQuickLinks = quickLinks
         .filter((link) => link.label.trim() || link.url.trim() || link.icon.trim())
         .map((link, index) => {
-          const label = link.label.trim();
           const url = link.url.trim();
+          const label = link.label.trim() || inferQuickLinkLabel(url);
           const icon = link.icon.trim();
 
-          if (!label || !url) {
-            throw new Error(`Completa nombre y URL en el acceso directo ${index + 1}.`);
+          if (!url) {
+            throw new Error(`Completa la URL en el acceso directo ${index + 1}.`);
           }
 
           try {
             new URL(url);
           } catch {
             throw new Error(`La URL del acceso directo ${index + 1} no es valida.`);
+          }
+
+          if (!label) {
+            throw new Error(`Completa el nombre del acceso directo ${index + 1}.`);
           }
 
           return { label, url, icon: icon || "LINK" };
@@ -238,13 +256,14 @@ export default function ClientsAdmin() {
                 Anadir cliente
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-3xl">
-              <DialogHeader>
+            <DialogContent className="max-h-[90vh] max-w-3xl overflow-hidden p-0">
+              <DialogHeader className="border-b px-6 pb-4 pt-6">
                 <DialogTitle>Alta y configuracion de cliente</DialogTitle>
                 <DialogDescription>Crea un nuevo grupo educativo, elige los colores del menu lateral y define accesos directos para su equipo.</DialogDescription>
               </DialogHeader>
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+                <form onSubmit={form.handleSubmit(onSubmit)} className="flex max-h-[calc(90vh-88px)] flex-col">
+                  <div className="space-y-5 overflow-y-auto px-6 py-5">
                   <FormField
                     control={form.control}
                     name="name"
@@ -313,12 +332,12 @@ export default function ClientsAdmin() {
                       <LinkIcon className="h-4 w-4" />
                       Vista previa del menu lateral
                     </div>
-                    <div className="rounded-xl p-4" style={{ backgroundColor: sidebarBackgroundColor, color: sidebarTextColor }}>
-                      <div className="mb-3 text-sm font-semibold opacity-80">Centro de ayuda</div>
+                    <div className="rounded-xl p-3" style={{ backgroundColor: sidebarBackgroundColor, color: sidebarTextColor }}>
+                      <div className="mb-2 text-sm font-semibold opacity-80">Centro de ayuda</div>
                       <div className="space-y-2 text-sm">
                         <div className="rounded-md px-3 py-2" style={{ backgroundColor: `${sidebarTextColor}22` }}>Tickets de consulta</div>
                         <div className="rounded-md px-3 py-2">Miembros del equipo</div>
-                        <div className="mt-4 border-t border-white/20 pt-3 text-base font-bold">{form.watch("name") || "Nombre del cliente"}</div>
+                        <div className="mt-3 border-t border-white/20 pt-3 text-base font-bold">{form.watch("name") || "Nombre del cliente"}</div>
                       </div>
                     </div>
                   </div>
@@ -351,7 +370,7 @@ export default function ClientsAdmin() {
                             </div>
                             <div className="grid gap-4 lg:grid-cols-[1fr_1.4fr_auto]">
                               <Input
-                                placeholder="Ej. MEE Platform"
+                                placeholder="Ej. MEE Platform (o dejalo vacio y se generara desde la URL)"
                                 value={link.label}
                                 onChange={(event) => updateQuickLink(link.id, { label: event.target.value })}
                               />
@@ -398,7 +417,9 @@ export default function ClientsAdmin() {
                     )}
                   </div>
 
-                  <DialogFooter>
+                  </div>
+
+                  <DialogFooter className="border-t bg-white px-6 py-4">
                     <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
                     <Button type="submit" disabled={createTenant.isPending}>
                       {createTenant.isPending ? "Creando..." : "Crear cliente"}
