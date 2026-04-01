@@ -76,22 +76,32 @@ router.post("/", requireAuth, requireRole("superadmin", "tecnico", "manager"), a
   }
 
   const authUser = (req as any).user;
-  const tenant = await db.insert(tenantsTable).values({
-    name: parsed.data.name,
-    slug: parsed.data.slug,
-    contactEmail: parsed.data.contactEmail ?? null,
-    primaryColor: parsed.data.primaryColor ?? null,
-  }).returning();
+  try {
+    const tenant = await db.insert(tenantsTable).values({
+      name: parsed.data.name,
+      slug: parsed.data.slug,
+      contactEmail: parsed.data.contactEmail ?? null,
+      primaryColor: parsed.data.primaryColor ?? null,
+    }).returning();
 
-  await createAuditLog({
-    action: "create",
-    entityType: "tenant",
-    entityId: tenant[0]!.id,
-    userId: authUser.userId,
-    newValues: parsed.data,
-  });
+    await createAuditLog({
+      action: "create",
+      entityType: "tenant",
+      entityId: tenant[0]!.id,
+      userId: authUser.userId,
+      newValues: parsed.data,
+    });
 
-  res.status(201).json({ ...tenant[0], totalUsers: 0, totalTickets: 0, openTickets: 0 });
+    res.status(201).json({ ...tenant[0], totalUsers: 0, totalTickets: 0, openTickets: 0 });
+  } catch (error: any) {
+    if (error?.code === "23505") {
+      res.status(409).json({ error: "Conflict", message: "Ya existe un cliente con ese slug." });
+      return;
+    }
+
+    console.error("Create tenant failed", error);
+    res.status(500).json({ error: "InternalServerError", message: "No se pudo crear el cliente." });
+  }
 });
 
 router.get("/:tenantId", requireAuth, requireRole("superadmin", "tecnico", "admin_cliente", "manager"), async (req, res) => {

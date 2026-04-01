@@ -166,7 +166,7 @@ export default function NewEducationTicket() {
                     <FormItem>
                       <FormLabel>Colegio *</FormLabel>
                       <FormControl>
-                        <Input placeholder="Ej. Peñalar, Valdefuentes..." {...field} />
+                        <Input placeholder="Ej. Colegio Principal" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

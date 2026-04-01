@@ -133,7 +133,7 @@ export default function ClientsAdmin() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Nombre</FormLabel>
-                        <FormControl><Input placeholder="Ej. Educare" {...field} /></FormControl>
+                        <FormControl><Input placeholder="Ej. Grupo Escolar Norte" {...field} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -144,7 +144,7 @@ export default function ClientsAdmin() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Slug</FormLabel>
-                        <FormControl><Input placeholder="educare" {...field} /></FormControl>
+                        <FormControl><Input placeholder="grupo-escolar-norte" {...field} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
