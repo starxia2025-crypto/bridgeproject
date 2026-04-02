@@ -16,7 +16,6 @@ import Clients from "@/pages/clients-admin";
 import Users from "@/pages/users";
 import Audit from "@/pages/audit";
 import Settings from "@/pages/settings";
-import Admin from "@/pages/admin";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -68,10 +67,6 @@ function Router() {
         {() => <ProtectedRoute component={Dashboard} roles={['superadmin', 'admin_cliente', 'manager', 'tecnico']} />}
       </Route>
 
-      <Route path="/admin">
-        {() => <ProtectedRoute component={Admin} roles={['superadmin', 'tecnico', 'manager']} />}
-      </Route>
-      
       <Route path="/tickets/new">
         {() => <ProtectedRoute component={NewTicket} roles={['superadmin', 'admin_cliente', 'tecnico', 'usuario_cliente']} />}
       </Route>

@@ -44,7 +44,7 @@ export default function TicketDetail() {
     mutation: {}
   });
 
-  const isStaff = user?.role === 'superadmin' || user?.role === 'tecnico';
+  const isStaff = user?.role === 'tecnico';
 
   if (ticketLoading) {
     return (
@@ -114,7 +114,7 @@ export default function TicketDetail() {
                   <SelectContent>
                     <SelectItem value={TicketStatus.nuevo}>Nuevo</SelectItem>
                     <SelectItem value={TicketStatus.pendiente}>Pendiente</SelectItem>
-                    <SelectItem value={TicketStatus.en_revision}>En Revisión</SelectItem>
+                    <SelectItem value={TicketStatus.en_revision}>En RevisiÃ³n</SelectItem>
                     <SelectItem value={TicketStatus.en_proceso}>En Proceso</SelectItem>
                     <SelectItem value={TicketStatus.esperando_cliente}>Esperando Cliente</SelectItem>
                     <SelectItem value={TicketStatus.resuelto}>Resuelto</SelectItem>
@@ -130,7 +130,7 @@ export default function TicketDetail() {
       <div className="grid md:grid-cols-3 gap-6">
         {/* Hilo principal */}
         <div className="md:col-span-2 space-y-6">
-          {/* Descripción original */}
+          {/* DescripciÃ³n original */}
           <Card className="shadow-sm">
             <CardContent className="pt-6">
               <div className="prose dark:prose-invert max-w-none whitespace-pre-wrap text-slate-700 dark:text-slate-300">
@@ -183,7 +183,7 @@ export default function TicketDetail() {
           <Card className={`shadow-sm border-2 ${isInternal ? 'border-amber-200 dark:border-amber-800/50 bg-amber-50/20' : 'border-primary/20 focus-within:border-primary'}`}>
             <CardContent className="p-4">
               <Textarea 
-                placeholder={isInternal ? "Escribe una nota interna (los clientes no la verán)..." : "Escribe una respuesta..."}
+                placeholder={isInternal ? "Escribe una nota interna (los clientes no la verÃ¡n)..." : "Escribe una respuesta..."}
                 className={`min-h-[120px] resize-y border-0 focus-visible:ring-0 p-0 shadow-none text-base bg-transparent ${isInternal ? 'placeholder:text-amber-700/40' : ''}`}
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
@@ -231,8 +231,8 @@ export default function TicketDetail() {
             </CardHeader>
             <CardContent className="p-4 pt-0 space-y-4">
               <div>
-                <div className="text-xs text-slate-500 mb-1">Categoría</div>
-                <div className="font-medium text-sm capitalize">{ticket.category || 'Sin categoría'}</div>
+                <div className="text-xs text-slate-500 mb-1">CategorÃ­a</div>
+                <div className="font-medium text-sm capitalize">{ticket.category || 'Sin categorÃ­a'}</div>
               </div>
               <div>
                 <div className="text-xs text-slate-500 mb-1">Asignado a</div>

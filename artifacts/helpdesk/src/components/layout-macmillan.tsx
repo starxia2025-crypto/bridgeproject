@@ -7,7 +7,6 @@ import {
   Users as UsersIcon,
   Building2,
   ActivitySquare,
-  ShieldCheck,
   Settings,
   LogOut,
   Menu,
@@ -53,9 +52,8 @@ export function MacmillanLayout({ children }: { children: React.ReactNode }) {
     { href: "/dashboard", label: "Estadisticas", icon: LayoutDashboard, roles: ["superadmin", "admin_cliente", "manager", "tecnico"] },
     { href: "/tickets", label: "Tickets de consulta", icon: Ticket, roles: ["superadmin", "admin_cliente", "tecnico", "usuario_cliente"] },
     { href: "/portal", label: "Centro de ayuda", icon: BookOpen, roles: ["superadmin", "admin_cliente", "manager", "tecnico", "usuario_cliente", "visor_cliente"] },
-    { href: "/admin", label: "Admin", icon: ShieldCheck, roles: ["superadmin", "tecnico", "manager"] },
-    { href: "/clients", label: "Clientes", icon: Building2, roles: ["superadmin"] },
-    { href: "/users", label: "Miembros del equipo", icon: UsersIcon, roles: ["superadmin", "admin_cliente"] },
+    { href: "/clients", label: "Colegios", icon: Building2, roles: ["superadmin"] },
+    { href: "/users", label: "Usuarios", icon: UsersIcon, roles: ["superadmin", "admin_cliente"] },
     { href: "/audit", label: "Auditoria", icon: ActivitySquare, roles: ["superadmin"] },
   ].filter((item) => item.roles.includes(user.role));
 
