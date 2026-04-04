@@ -2,14 +2,14 @@ import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useLogin, useGetMe } from "@workspace/api-client-react";
+import { useLogin } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { LifeBuoy, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
-import { useEffect } from "react";
 import { buildApiUrl } from "@/lib/api-base-url";
+import { getDefaultRouteForRole } from "@/lib/default-route";
 
 const loginSchema = z.object({
   email: z.string().email("Introduce un correo electrónico válido"),
@@ -29,11 +29,6 @@ const MicrosoftIcon = () => (
 
 export default function MacmillanLogin() {
   const [, setLocation] = useLocation();
-  const { data: user, isLoading: isUserLoading } = useGetMe();
-
-  useEffect(() => {
-    if (user && !isUserLoading) setLocation("/dashboard");
-  }, [user, isUserLoading, setLocation]);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -42,7 +37,7 @@ export default function MacmillanLogin() {
 
   const loginMutation = useLogin({
     mutation: {
-      onSuccess: () => setLocation("/dashboard"),
+      onSuccess: (response) => setLocation(getDefaultRouteForRole(response.role)),
     },
   });
 
@@ -53,8 +48,6 @@ export default function MacmillanLogin() {
   function handleMicrosoftLogin() {
     window.location.href = buildApiUrl("/api/auth/microsoft");
   }
-
-  if (isUserLoading || user) return null;
 
   return (
     <div className="min-h-screen w-full flex bg-slate-50 dark:bg-slate-950">
