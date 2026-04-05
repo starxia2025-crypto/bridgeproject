@@ -38,7 +38,7 @@ export function MacmillanLayout({ children }: { children: React.ReactNode }) {
   if (!user) return <>{children}</>;
 
   const tenantConfig = user as any;
-  const activeSchoolName = user.tenantName || "Macmillan Iberia";
+  const activeSchoolName = (user as any).schoolName || user.tenantName || "Macmillan Iberia";
   const sidebarBackgroundColor = tenantConfig.tenantSidebarBackgroundColor || "#ffffff";
   const sidebarTextColor = tenantConfig.tenantSidebarTextColor || "#0f172a";
   const tenantQuickLinks = Array.isArray(tenantConfig.tenantQuickLinks) ? tenantConfig.tenantQuickLinks : [];

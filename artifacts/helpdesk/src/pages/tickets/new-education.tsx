@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import {
   ApiError,
@@ -18,20 +18,20 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, RefreshCcw, TriangleAlert, Building2, Undo2, BookX } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 const educationTicketSchema = z.object({
   studentEmail: z.string().trim().email("Indica el correo del alumno"),
   schoolId: z.coerce.number().optional(),
   reporterEmail: z.union([z.literal(""), z.string().trim().email("Indica un correo valido")]).optional(),
-  subjectType: z.enum(["Alumno", "Docente"]).optional(),
+  subjectType: z.enum(["Alumno", "Docente", "SobreMiCuenta"]).optional(),
   studentEnrollment: z.string().optional(),
-  stage: z.string().min(2, "Indica la etapa educativa"),
-  course: z.string().min(1, "Indica el curso"),
-  subject: z.enum(["Inglés", "Alemán", "Francés", "Todas"]),
-  inquiryType: z.enum(["Alumno sin libros", "No puede acceder", "Problemas de activación", "No funciona el libro", "Otro"]),
-  description: z.string().min(10, "La descripción debe tener al menos 10 caracteres"),
+  stage: z.string().optional(),
+  course: z.string().optional(),
+  subject: z.enum(["Inglés", "Alemán", "Francés", "Todas"]).optional(),
+  inquiryType: z.enum(["Alumno sin libros", "No puede acceder", "Problemas de activación", "No funciona el libro", "Otro"]).optional(),
+  description: z.string().optional(),
   observations: z.string().optional(),
   priority: z.enum(["baja", "media", "alta", "urgente"] as const).optional(),
   tenantId: z.coerce.number().optional(),
@@ -40,7 +40,7 @@ const educationTicketSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["subjectType"],
-      message: "Selecciona si la consulta es sobre un alumno o sobre tu cuenta",
+      message: "Selecciona si la consulta es sobre un alumno, un docente o sobre tu cuenta",
     });
   }
   if (!values.schoolId) {
@@ -55,6 +55,20 @@ const educationTicketSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ["studentEnrollment"],
       message: "La matrícula es obligatoria cuando la consulta es sobre un alumno",
+    });
+  }
+  if (values.subjectType === "Alumno" && !values.stage?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["stage"],
+      message: "Indica la etapa educativa",
+    });
+  }
+  if (values.subjectType === "Alumno" && !values.course?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["course"],
+      message: "Indica el curso",
     });
   }
 });
@@ -79,6 +93,7 @@ type MochilaLookupResult = {
     token: string | null;
     description: string | null;
     ean: string | null;
+    idOrder: string | null;
     idConsignaOrder: number;
     esGoogle: boolean | null;
   }>;
@@ -92,6 +107,7 @@ type ReturnCandidate = {
   google: string;
   bookCode: string;
 };
+type StudentLineAction = "return" | "missing_book";
 
 const FORGOT_PASSWORD_URL = "https://identity.macmillaneducationeverywhere.com/forgot-password?returnUrl=%2Fconnect%2Fauthorize%2Fcallback%3Fclient_id%3D21%26redirect_uri%3Dhttps%253A%252F%252Fliveapi.macmillaneducationeverywhere.com%252Fapi%252Foidcintegration%252Fcode%26response_type%3Dcode%26scope%3Dopenid%2520profile%2520offline_access%26code_challenge_method%3DS256%26code_challenge%3Dno-81rQrMJwoLhRrryqaEx7ZBNWokrmhhAD98uIz5fo%26state%3Daf32b1c7-a894-47d9-842f-73d9fff373f7";
 const BLINK_PASSWORD_URL = "https://www.blinklearning.com/v/1774948299/themes/tmpux/launch.php";
@@ -101,6 +117,20 @@ function inferMochilaDescription(record: MochilaLookupResult["records"][number])
   return (record.token?.trim().length ?? 0) > 15 ? "Inglés" : "Francés/Alemán";
 }
 
+function getInitials(name: string | null, surname: string | null, fallbackEmail: string | null) {
+  const fullName = [name, surname].filter(Boolean).join(" ").trim();
+  if (fullName) {
+    return fullName
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((part) => part.charAt(0).toUpperCase())
+      .join("");
+  }
+
+  const fallback = fallbackEmail?.trim() || "";
+  return fallback.slice(0, 2).toUpperCase() || "AL";
+}
+
 export default function NewEducationTicket() {
   const [, setLocation] = useLocation();
   const { data: user } = useGetMe();
@@ -108,11 +138,11 @@ export default function NewEducationTicket() {
   const [mochilaLookupError, setMochilaLookupError] = useState<string | null>(null);
   const [isLookingUpMochila, setIsLookingUpMochila] = useState(false);
   const [mochilaActivationSuggested, setMochilaActivationSuggested] = useState(false);
-  const [mochilaLookupMode, setMochilaLookupMode] = useState<"email" | "order">("email");
+  const [, setMochilaLookupMode] = useState<"email" | "order">("email");
   const [mochilaOrderId, setMochilaOrderId] = useState("");
   const [showTeacherRegistrationRequest, setShowTeacherRegistrationRequest] = useState(false);
   const [teacherRegistrationNotes, setTeacherRegistrationNotes] = useState("");
-  const [selectedReturnItemKeys, setSelectedReturnItemKeys] = useState<string[]>([]);
+  const [selectedLineActions, setSelectedLineActions] = useState<Record<string, StudentLineAction[]>>({});
 
   const { data: tenants } = useListTenants(
     { limit: 100 },
@@ -149,7 +179,11 @@ export default function NewEducationTicket() {
   const selectedSchoolId = form.watch("schoolId");
   const studentEmail = form.watch("studentEmail");
   const subjectType = form.watch("subjectType");
-  const hasSelectedSubjectType = subjectType === "Alumno" || subjectType === "Docente";
+  const supportsTeacherSubject = ["visor_cliente", "admin_cliente", "manager"].includes(user?.role || "");
+  const isTeacherSubject = subjectType === "Docente";
+  const isOwnAccountSubject = subjectType === "SobreMiCuenta";
+  const hasSelectedSubjectType =
+    subjectType === "Alumno" || isTeacherSubject || isOwnAccountSubject;
   const usesSchoolReporterFlow = user?.role === "usuario_cliente" || user?.role === "visor_cliente";
   const useSessionSchool = user?.scopeType === "school" || usesSchoolReporterFlow;
   const hideReporterEmailField = usesSchoolReporterFlow;
@@ -161,16 +195,36 @@ export default function NewEducationTicket() {
   const tenantPanelText = (user as any)?.tenantSidebarTextColor || selectedTenant?.sidebarTextColor || "#ffffff";
   const tenantPanelMuted = tenantPanelText === "#ffffff" || tenantPanelText === "#f8fafc" ? "rgba(255,255,255,0.78)" : "rgba(15,23,42,0.72)";
   const tenantPanelBorder = tenantPanelText === "#ffffff" || tenantPanelText === "#f8fafc" ? "rgba(255,255,255,0.18)" : "rgba(15,23,42,0.1)";
+    const panelInputStyle = {
+      backgroundColor: "#ffffff",
+      borderColor: "rgba(255,255,255,0.92)",
+      color: "#0f172a",
+      caretColor: "#0f172a",
+      ["--autofill-bg" as string]: "#ffffff",
+      ["--autofill-color" as string]: "#0f172a",
+    } as const;
   const mochilasPanelBackground = tenantPanelBackground;
   const mochilasPanelBorder = tenantPanelBorder;
   const mochilasEnabled = Boolean(selectedTenant?.hasMochilasAccess ?? (user as any)?.tenantHasMochilasAccess);
   const orderLookupEnabled = Boolean(selectedTenant?.hasOrderLookup ?? (user as any)?.tenantHasOrderLookup);
-  const returnsEnabled = Boolean(selectedTenant?.hasReturnsAccess ?? (user as any)?.tenantHasReturnsAccess);
+  const returnsEnabled = Boolean(
+    selectedTenant?.hasReturnsAccess ??
+      (selectedTenant as any)?.has_returns_access ??
+      (user as any)?.tenantHasReturnsAccess ??
+      (user as any)?.tenant_has_returns_access
+  );
   const shouldShowMochilasLookup = hasSelectedSubjectType && subjectType === "Alumno" && (mochilasEnabled || orderLookupEnabled || useSessionSchool);
   const tenantSchools = (selectedTenant?.schools ?? []).filter((school) => school.active);
   const selectedSchool = tenantSchools.find((school) => school.id === selectedSchoolId);
+  const shouldUseSimplifiedAlumnoFlow = subjectType === "Alumno" && shouldShowMochilasLookup && !!mochilaLookup;
   const shouldHideExtendedFields =
-    !hasSelectedSubjectType || subjectType === "Docente" || (subjectType === "Alumno" && shouldShowMochilasLookup && !mochilaLookup);
+    !hasSelectedSubjectType ||
+    isTeacherSubject ||
+    isOwnAccountSubject ||
+    shouldUseSimplifiedAlumnoFlow ||
+    (subjectType === "Alumno" && shouldShowMochilasLookup && !mochilaLookup);
+  const shouldShowTeacherTicketFields = isTeacherSubject;
+  const canSubmitForm = shouldShowTeacherTicketFields || !shouldHideExtendedFields || shouldUseSimplifiedAlumnoFlow;
   const summarizedMochilaRecords = useMemo(() => {
     if (!mochilaLookup) return [];
 
@@ -178,15 +232,47 @@ export default function NewEducationTicket() {
       key: `${record.idConsignaOrder}-${record.ean?.trim() || "-"}-${record.token?.trim() || "-"}-${index}`,
       description: inferMochilaDescription(record),
       isbn: record.ean?.trim() || "-",
-      orderId: String(record.idConsignaOrder),
+      orderId: record.idOrder?.trim() || String(record.idConsignaOrder),
       google: record.esGoogle === null ? "-" : record.esGoogle ? "Si" : "No",
       bookCode: record.token?.trim() || "-",
     }));
   }, [mochilaLookup]);
-  const selectedReturnItems = useMemo(
-    () => summarizedMochilaRecords.filter((record) => selectedReturnItemKeys.includes(record.key)),
-    [selectedReturnItemKeys, summarizedMochilaRecords]
+  const selectedActionItems = useMemo(
+    () =>
+      summarizedMochilaRecords
+        .filter((record) => (selectedLineActions[record.key] ?? []).length > 0)
+        .map((record) => ({
+          ...record,
+          actions: selectedLineActions[record.key] ?? [],
+        })),
+    [selectedLineActions, summarizedMochilaRecords]
   );
+  const selectedReturnItems = useMemo(
+    () => selectedActionItems.filter((record) => record.actions.includes("return")),
+    [selectedActionItems]
+  );
+  const studentEnglishCredential = useMemo(() => {
+    if (!mochilaLookup) return null;
+
+    const record = mochilaLookup.records.find((item) => (item.token?.trim().length ?? 0) > 15);
+    if (!record) return null;
+
+    return {
+      user: record.studentUser?.trim() || mochilaLookup.studentUser || null,
+      password: record.studentPassword?.trim() || null,
+    };
+  }, [mochilaLookup]);
+  const studentBlinkCredential = useMemo(() => {
+    if (!mochilaLookup) return null;
+
+    const record = mochilaLookup.records.find((item) => (item.token?.trim().length ?? 0) <= 15);
+    if (!record) return null;
+
+    return {
+      user: record.studentUser?.trim() || mochilaLookup.studentUser || null,
+      password: record.studentPassword?.trim() || null,
+    };
+  }, [mochilaLookup]);
 
   useEffect(() => {
     if (!user) return;
@@ -203,7 +289,7 @@ export default function NewEducationTicket() {
       form.setValue("reporterEmail", user.email);
     }
 
-    if (subjectType === "Docente" && user.email) {
+    if (subjectType === "SobreMiCuenta" && user.email) {
       form.setValue("studentEmail", user.email);
     }
   }, [form, hideReporterEmailField, subjectType, useSessionSchool, user]);
@@ -263,7 +349,7 @@ export default function NewEducationTicket() {
     setMochilaLookup(null);
     setMochilaLookupError(null);
     setMochilaActivationSuggested(false);
-    setSelectedReturnItemKeys([]);
+    setSelectedLineActions({});
 
     try {
       const params = new URLSearchParams({ email: normalizedEmail });
@@ -299,8 +385,8 @@ export default function NewEducationTicket() {
 
   async function lookupStudentByOrderInMochilas() {
     const normalizedOrderId = mochilaOrderId.trim();
-    if (!normalizedOrderId || Number.isNaN(Number(normalizedOrderId))) {
-      setMochilaLookupError("Indica un numero de pedido valido.");
+    if (!normalizedOrderId) {
+      setMochilaLookupError("Indica un pedido valido.");
       return;
     }
 
@@ -308,7 +394,7 @@ export default function NewEducationTicket() {
     setMochilaLookup(null);
     setMochilaLookupError(null);
     setMochilaActivationSuggested(false);
-    setSelectedReturnItemKeys([]);
+    setSelectedLineActions({});
 
     try {
       const params = new URLSearchParams({ orderId: normalizedOrderId });
@@ -324,8 +410,8 @@ export default function NewEducationTicket() {
       }
     } catch (error) {
       const message =
-        error instanceof Error
-          ? error.message
+        error instanceof ApiError && error.status === 404
+          ? "Pedido no encontrado. No es mochila, o no ha sido procesado aun."
           : "No se pudo consultar la informacion del pedido en Mochilas.";
 
       setMochilaLookupError(message);
@@ -337,32 +423,6 @@ export default function NewEducationTicket() {
     } finally {
       setIsLookingUpMochila(false);
     }
-  }
-
-  async function handleForgotStudentPassword() {
-    const email = mochilaLookup?.studentEmail?.trim() || studentEmail.trim();
-    if (!email) {
-      form.setError("studentEmail", {
-        type: "manual",
-        message: subjectType === "Docente" ? "Indica primero el email de acceso del docente" : "Indica primero el correo del alumno",
-      });
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(email);
-      toast({
-        title: "Correo del alumno copiado",
-        description: "Se ha copiado el email del afectado para que puedas pegarlo en la pantalla de recuperación.",
-      });
-    } catch {
-      toast({
-        title: "Abriendo recuperación de contraseña",
-        description: "Si no se copia automáticamente, pega manualmente el correo del alumno en la página externa.",
-      });
-    }
-
-    window.open(FORGOT_PASSWORD_URL, "_blank", "noopener,noreferrer");
   }
 
   async function openRecoveryUrl(url: string, email: string, successTitle: string, successDescription: string) {
@@ -406,6 +466,31 @@ export default function NewEducationTicket() {
       "Correo del docente copiado",
       "Se ha copiado el email de acceso del docente para que puedas pegarlo en BlinkLearning."
     );
+  }
+
+  async function handleForgotStudentEnglishPassword() {
+    await openRecoveryUrl(
+      FORGOT_PASSWORD_URL,
+      mochilaLookup?.studentEmail?.trim() || studentEmail.trim(),
+      "Correo del alumno copiado",
+      "Se ha copiado el email del alumno para que puedas pegarlo en la recuperación de contraseña de Inglés."
+    );
+  }
+
+  async function handleForgotStudentBlinkPassword() {
+    await openRecoveryUrl(
+      BLINK_PASSWORD_URL,
+      mochilaLookup?.studentEmail?.trim() || studentEmail.trim(),
+      "Correo del alumno copiado",
+      "Se ha copiado el email del alumno para que puedas pegarlo en BlinkLearning."
+    );
+  }
+
+  function handleChangeStudentEmail() {
+    toast({
+      title: "Cambio de email pendiente",
+      description: "La funcionalidad para cambiar el email del alumno la configuraremos en el siguiente paso.",
+    });
   }
 
   function createTeacherRegistrationTicket() {
@@ -481,12 +566,12 @@ export default function NewEducationTicket() {
 
     quickAccessIssueMutation.mutate({
       data: {
-        title: `${schoolName} - ${subjectType === "Docente" ? "El docente" : "El alumno"} aun continua sin poder acceder`,
+        title: `${schoolName} - ${subjectType === "Docente" ? "El docente" : subjectType === "SobreMiCuenta" ? "El usuario" : "El alumno"} aun continua sin poder acceder`,
         description: [
           `Colegio: ${schoolName}`,
           `${subjectType}: ${normalizedStudentEmail}`,
           `Informador: ${user?.email ?? "-"}`,
-          `Motivo: Tras la revision inicial y la recuperacion de contrasena, el ${subjectType === "Docente" ? "docente" : "alumno"} aun no puede acceder.`,
+          `Motivo: Tras la revision inicial y la recuperacion de contrasena, ${subjectType === "Docente" ? "el docente" : subjectType === "SobreMiCuenta" ? "el usuario" : "el alumno"} aun no puede acceder.`,
           "Accion solicitada: Revision tecnica prioritaria del acceso en Mochilas.",
         ].join("\n"),
         priority: TicketPriority.alta,
@@ -555,13 +640,42 @@ export default function NewEducationTicket() {
     });
   }
 
-  function toggleReturnItemSelection(itemKey: string) {
-    setSelectedReturnItemKeys((current) =>
-      current.includes(itemKey) ? current.filter((key) => key !== itemKey) : [...current, itemKey]
-    );
+  function toggleLineAction(itemKey: string, action: StudentLineAction) {
+    setSelectedLineActions((current) => {
+      const activeActions = current[itemKey] ?? [];
+      const nextActions = activeActions.includes(action)
+        ? activeActions.filter((item) => item !== action)
+        : [...activeActions, action];
+
+      if (nextActions.length === 0) {
+        const { [itemKey]: _removed, ...rest } = current;
+        return rest;
+      }
+
+      return {
+        ...current,
+        [itemKey]: nextActions,
+      };
+    });
+  }
+
+  function resetMochilasLookupState() {
+    setMochilaLookup(null);
+    setMochilaLookupError(null);
+    setMochilaActivationSuggested(false);
+    setSelectedLineActions({});
+    setMochilaOrderId("");
   }
 
   function onSubmit(data: EducationTicketFormValues) {
+    if (data.subjectType === "Docente" && !data.description?.trim()) {
+      form.setError("description", {
+        type: "manual",
+        message: "Describe brevemente lo que le sucede al docente",
+      });
+      return;
+    }
+
     if (subjectType === "Alumno" && shouldShowMochilasLookup) {
       const normalizedStudentEmail = data.studentEmail.trim().toLowerCase();
       if (!mochilaLookup || mochilaLookup.studentEmail !== normalizedStudentEmail) {
@@ -589,41 +703,72 @@ export default function NewEducationTicket() {
       ? (user?.email ?? null)
       : (data.reporterEmail?.trim().toLowerCase() || null);
 
-    const title = `${schoolName} - ${data.inquiryType}`;
-    const description = [
-      `Colegio: ${schoolName}`,
-      `${data.subjectType}: ${data.studentEmail}`,
-      reporterEmail ? `Informador: ${reporterEmail}` : null,
-      `Consulta sobre: ${data.subjectType}`,
-      data.studentEnrollment ? `Matrícula: ${data.studentEnrollment}` : null,
-      `Etapa: ${data.stage}`,
-      `Curso: ${data.course}`,
-      `Asignatura: ${data.subject}`,
-      `Tipo de consulta: ${data.inquiryType}`,
-      `Descripción: ${data.description}`,
-      data.observations ? `Observaciones: ${data.observations}` : null,
-    ].filter(Boolean).join("\n");
+    const normalizedAffectedEmail = data.studentEmail.trim().toLowerCase();
+    const selectedIssueLabels = selectedActionItems.flatMap((item) =>
+      item.actions.map((action) => (action === "return" ? "Devolución" : "No ve el libro"))
+    );
+    const primaryIssueLabel = selectedIssueLabels[0] || data.inquiryType || "Consulta sobre libros";
+    const title =
+      data.subjectType === "Docente"
+        ? `${schoolName} - El docente no puede acceder`
+        : `${schoolName} - ${primaryIssueLabel}`;
+    const description = data.subjectType === "Docente"
+      ? [
+          `Colegio: ${schoolName}`,
+          `Docente: ${normalizedAffectedEmail}`,
+          reporterEmail ? `Informador: ${reporterEmail}` : null,
+          "Consulta sobre: Docente",
+          `Prioridad: ${data.priority ?? TicketPriority.media}`,
+          `Descripción: ${data.description}`,
+        ].filter(Boolean).join("\n")
+      : shouldUseSimplifiedAlumnoFlow
+      ? [
+          `Colegio: ${schoolName}`,
+          `Alumno: ${normalizedAffectedEmail}`,
+          reporterEmail ? `Informador: ${reporterEmail}` : null,
+          "Consulta sobre: Alumno",
+          selectedActionItems.length > 0
+            ? `Acciones seleccionadas: ${selectedActionItems
+                .map((item) => `${item.description} (${item.actions.map((action) => (action === "return" ? "Devolución" : "No ve el libro")).join(", ")})`)
+                .join(" | ")}`
+            : `Motivo principal: ${primaryIssueLabel}`,
+          data.observations?.trim() ? `Observaciones: ${data.observations.trim()}` : null,
+        ].filter(Boolean).join("\n")
+      : [
+          `Colegio: ${schoolName}`,
+          `${data.subjectType}: ${normalizedAffectedEmail}`,
+          reporterEmail ? `Informador: ${reporterEmail}` : null,
+          `Consulta sobre: ${data.subjectType}`,
+          data.studentEnrollment ? `Matrícula: ${data.studentEnrollment}` : null,
+          `Etapa: ${data.stage}`,
+          `Curso: ${data.course}`,
+          `Asignatura: ${data.subject}`,
+          `Tipo de consulta: ${data.inquiryType}`,
+          `Descripción: ${data.description}`,
+          data.observations ? `Observaciones: ${data.observations}` : null,
+        ].filter(Boolean).join("\n");
 
     createMutation.mutate({
       data: {
         title,
         description,
         priority: data.priority,
-        category: "consulta_educativa",
+        category: data.subjectType === "Docente" ? "acceso_docente" : "consulta_educativa",
         customFields: {
           school: schoolName,
-          studentEmail: data.subjectType === "Alumno" ? data.studentEmail.trim().toLowerCase() : null,
-          teacherEmail: data.subjectType === "Docente" ? data.studentEmail.trim().toLowerCase() : null,
-          affectedEmail: data.studentEmail.trim().toLowerCase(),
+          studentEmail: data.subjectType === "Alumno" ? normalizedAffectedEmail : null,
+          teacherEmail: data.subjectType === "Docente" ? normalizedAffectedEmail : null,
+          affectedEmail: normalizedAffectedEmail,
           reporterEmail,
           subjectType: data.subjectType,
           studentEnrollment: data.studentEnrollment || null,
-          stage: data.stage,
-          course: data.course,
-          subject: data.subject,
-          inquiryType: data.inquiryType,
+          stage: data.stage || null,
+          course: data.course || null,
+          subject: data.subject || null,
+          inquiryType: data.subjectType === "Docente" ? "No puede acceder" : data.inquiryType,
           observations: data.observations || null,
           mochilaLookup,
+          lineActions: subjectType === "Alumno" && selectedActionItems.length > 0 ? selectedActionItems : null,
           returnItems: subjectType === "Alumno" && selectedReturnItems.length > 0 ? selectedReturnItems : null,
           returnRequested: subjectType === "Alumno" && selectedReturnItems.length > 0,
         },
@@ -642,15 +787,14 @@ export default function NewEducationTicket() {
 
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Nueva consulta educativa</h1>
-        <p className="text-slate-500 mt-1">Registra una incidencia de forma guiada para que el equipo técnico pueda atenderla con rapidez.</p>
+        <p className="text-slate-500 mt-1">Registra una consulta de forma guiada para que el equipo técnico pueda atenderla con rapidez.</p>
       </div>
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
           <Card>
             <CardHeader>
-              <CardTitle>Datos de la incidencia</CardTitle>
-              <CardDescription>Formulario pensado para colegios, alumnado y profesorado dentro del soporte de Macmillan.</CardDescription>
+              <CardTitle>Datos de la consulta</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               {(user?.role === "superadmin" || user?.role === "tecnico") && (
@@ -747,12 +891,12 @@ export default function NewEducationTicket() {
                 control={form.control}
                 name="subjectType"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="w-full md:w-[20rem]">
                     <FormLabel>La consulta es sobre *</FormLabel>
                     <Select
                       onValueChange={(value) => {
                             field.onChange(value);
-                            form.setValue("studentEmail", value === "Docente" ? (user?.email ?? "") : "");
+                            form.setValue("studentEmail", value === "SobreMiCuenta" ? (user?.email ?? "") : "");
                             setMochilaLookup(null);
                             setMochilaLookupError(null);
                             setMochilaActivationSuggested(false);
@@ -763,13 +907,14 @@ export default function NewEducationTicket() {
                       value={field.value}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="w-full">
                           <SelectValue placeholder="Selecciona una opción" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="Alumno">Alumno</SelectItem>
-                        <SelectItem value="Docente">Sobre mi cuenta</SelectItem>
+                        {supportsTeacherSubject && <SelectItem value="Docente">Docente</SelectItem>}
+                        <SelectItem value="SobreMiCuenta">Sobre mi cuenta</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -777,7 +922,7 @@ export default function NewEducationTicket() {
                 )}
               />
 
-              {subjectType === "Docente" && (
+              {subjectType === "SobreMiCuenta" && (
                 <div
                   className="space-y-4 rounded-2xl border p-4"
                   style={{ backgroundColor: tenantPanelBackground, borderColor: tenantPanelBorder, color: tenantPanelText }}
@@ -844,20 +989,87 @@ export default function NewEducationTicket() {
                 </div>
               )}
 
+              {subjectType === "Docente" && (
+                <div className="space-y-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-900">Incidencia de acceso para docente</h3>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Indica el correo del docente, la prioridad y una breve descripcion de lo que le sucede para enviar la solicitud.
+                    </p>
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="studentEmail"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Email del docente *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="docente@centro.es" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="priority"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Prioridad</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecciona prioridad" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value={TicketPriority.baja}>Baja</SelectItem>
+                            <SelectItem value={TicketPriority.media}>Media</SelectItem>
+                            <SelectItem value={TicketPriority.alta}>Alta</SelectItem>
+                            <SelectItem value={TicketPriority.urgente}>Urgente</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Descripcion de lo que le sucede *</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Describe brevemente el problema de acceso del docente..."
+                            className="min-h-[140px] resize-y"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
+
               {shouldShowMochilasLookup && (
                 <div
-                  className="space-y-4 rounded-2xl border p-4"
+                  className="space-y-5 rounded-[28px] border p-5 md:p-6"
                   style={{ backgroundColor: mochilasPanelBackground, borderColor: mochilasPanelBorder }}
                 >
                   <div>
-                    <h3 className="text-sm font-semibold" style={{ color: tenantPanelText }}>Busqueda previa en Mochilas</h3>
-                    <p className="mt-1 text-xs" style={{ color: tenantPanelMuted }}>
-                      Usa el correo del alumno o el numero de pedido para consultar su informacion de acceso en Mochilas.
+                    <h3 className="text-2xl font-semibold tracking-tight" style={{ color: tenantPanelText }}>Búsqueda de Mochilas</h3>
+                    <p className="mt-2 text-sm leading-6" style={{ color: tenantPanelMuted }}>
+                      Busca usando el correo electrónico del alumno o el número de pedido para consultar su información de acceso.
                     </p>
                   </div>
 
                   {(mochilasEnabled || useSessionSchool) && (
-                    <div className="grid gap-4 md:grid-cols-[1fr_auto]">
+                    <div className="grid gap-3 md:grid-cols-[minmax(17rem,20rem)_auto_auto] md:items-end">
                       <FormField
                         control={form.control}
                         name="studentEmail"
@@ -865,7 +1077,19 @@ export default function NewEducationTicket() {
                           <FormItem>
                             <FormLabel style={{ color: tenantPanelText }}>Email del alumno *</FormLabel>
                             <FormControl>
-                              <Input placeholder="alumno@centro.es" {...field} />
+                              <Input
+                                placeholder="alumno@centro.es"
+                                className="font-normal text-slate-900 placeholder:font-normal placeholder:!text-slate-400"
+                                style={panelInputStyle}
+                                autoComplete="off"
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    void lookupStudentInMochilas();
+                                  }
+                                }}
+                                {...field}
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -879,22 +1103,42 @@ export default function NewEducationTicket() {
                           onClick={lookupStudentInMochilas}
                           disabled={isLookingUpMochila || !(selectedTenantId || user?.tenantId)}
                         >
-                          {isLookingUpMochila ? "Buscando..." : "Buscar en Mochilas"}
+                          {isLookingUpMochila ? "Buscando..." : "Buscar en mochilas"}
+                        </Button>
+                      </div>
+                      <div className="flex items-end">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="w-full md:w-auto"
+                          onClick={resetMochilasLookupState}
+                        >
+                          <RefreshCcw className="mr-2 h-4 w-4" />
+                          Limpiar
                         </Button>
                       </div>
                     </div>
                   )}
 
                   {orderLookupEnabled && (
-                    <div className="grid gap-4 md:grid-cols-[1fr_auto]">
-                      <div className="space-y-2">
+                    <div className="grid gap-3 md:grid-cols-[minmax(10rem,12rem)_auto] md:items-end">
+                      <div className="w-full max-w-[12rem] space-y-2">
                         <label className="text-sm font-medium leading-none" style={{ color: tenantPanelText }}>
                           Pedido *
                         </label>
                         <Input
                           placeholder="Ej. 2068466760"
+                          className="font-normal text-slate-900 placeholder:font-normal placeholder:!text-slate-400"
+                          style={panelInputStyle}
+                          autoComplete="off"
                           value={mochilaOrderId}
                           onChange={(event) => setMochilaOrderId(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              void lookupStudentByOrderInMochilas();
+                            }
+                          }}
                         />
                       </div>
 
@@ -923,90 +1167,191 @@ export default function NewEducationTicket() {
                   )}
 
                   {mochilaLookup && (
-                    <div className="space-y-4 rounded-xl border bg-white p-4">
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Alumno</p>
-                          <p className="mt-1 text-sm font-medium text-slate-900">
-                            {[mochilaLookup.studentName, mochilaLookup.studentSurname].filter(Boolean).join(" ") || "Sin nombre"}
-                          </p>
-                          <p className="text-xs text-slate-500">{mochilaLookup.studentEmail}</p>
+                    <div className="space-y-4 rounded-[24px] border border-white/60 bg-white/95 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.12)] backdrop-blur">
+                      <div className="grid gap-4 lg:grid-cols-[1.05fr_1fr]">
+                        <div className="overflow-hidden rounded-[20px] border border-slate-200">
+                          <div className="flex items-start gap-4 border-b border-slate-200 p-4">
+                            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-2xl font-semibold text-indigo-600">
+                              {getInitials(mochilaLookup.studentName, mochilaLookup.studentSurname, mochilaLookup.studentEmail)}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-lg font-semibold text-slate-900">
+                                {[mochilaLookup.studentName, mochilaLookup.studentSurname].filter(Boolean).join(" ") || "Sin nombre"}
+                              </p>
+                              <p className="mt-1 truncate text-sm text-slate-500">{mochilaLookup.studentEmail}</p>
+                            </div>
+                          </div>
+                          <div className="p-4">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Colegios detectados</p>
+                            <div className="mt-3 space-y-3">
+                              {mochilaLookup.schools.map((school) => (
+                                <div key={school} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                  <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Desde</p>
+                                  <div className="mt-2 flex items-center gap-3">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600">
+                                      <Building2 className="h-5 w-5" />
+                                    </div>
+                                    <p className="text-base font-semibold leading-tight text-indigo-700">{school}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         </div>
-                        <div>
+
+                        <div className="rounded-[20px] border border-slate-200 p-4">
                           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Credenciales</p>
-                          <p className="mt-1 text-sm text-slate-900">Usuario: {mochilaLookup.studentUser || "-"}</p>
-                          <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                            <p className="text-sm text-slate-900">Contraseña: {mochilaLookup.studentPassword || "-"}</p>
-                            <div className="flex flex-col gap-2 sm:items-end">
-                              <Button type="button" size="sm" onClick={handleForgotStudentPassword}>
-                                He olvidado mi contraseña
+                          <div className="mt-3 space-y-3">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0">
+                                <p className="text-sm text-slate-500">Email del alumno:</p>
+                                <p className="truncate text-sm font-medium text-slate-900">{mochilaLookup.studentEmail || "-"}</p>
+                              </div>
+                              <Button type="button" size="sm" variant="outline" onClick={handleChangeStudentEmail}>
+                                Cambiar email
                               </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                onClick={createAccessIssueTicket}
-                                disabled={quickAccessIssueMutation.isPending}
-                              >
-                                {quickAccessIssueMutation.isPending ? "Creando consulta..." : "Aún continúas sin poder acceder"}
-                              </Button>
+                            </div>
+                            <div>
+                              <p className="text-sm text-slate-500">Usuario:</p>
+                              <p className="break-all text-sm font-medium text-slate-900">{mochilaLookup.studentUser || "-"}</p>
+                            </div>
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                  <p className="text-sm text-slate-500">Contraseña inglés:</p>
+                                  <p className="text-sm font-medium text-slate-900">{studentEnglishCredential?.password || "-"}</p>
+                                </div>
+                                <Button type="button" size="sm" onClick={handleForgotStudentEnglishPassword}>
+                                  Cambiar contraseña
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                  <p className="text-sm text-slate-500">Contraseña francés/alemán:</p>
+                                  <p className="text-sm font-medium text-slate-900">{studentBlinkCredential?.password || "-"}</p>
+                                </div>
+                                <Button type="button" size="sm" onClick={handleForgotStudentBlinkPassword}>
+                                  Cambiar contraseña
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="rounded-2xl border border-violet-200 bg-violet-50 p-3">
+                              <div className="flex items-start gap-2">
+                                <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-violet-500" />
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium text-slate-700">¿Aún continúas sin poder acceder?</p>
+                                  <p className="text-xs text-slate-500">Contacta con soporte técnico</p>
+                                </div>
+                              </div>
+                              <div className="mt-3 flex justify-end">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={createAccessIssueTicket}
+                                  disabled={quickAccessIssueMutation.isPending}
+                                >
+                                  {quickAccessIssueMutation.isPending ? "Creando consulta..." : "Contactar soporte"}
+                                </Button>
+                              </div>
                             </div>
                           </div>
                         </div>
                       </div>
 
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Colegios detectados</p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {mochilaLookup.schools.map((school) => (
-                            <span key={school} className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
-                              {school}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="overflow-hidden rounded-xl border border-slate-200">
-                        <table className="w-full text-sm">
-                          <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                      <div className="space-y-3">
+                        <p className="text-sm font-semibold text-slate-600">Colegios detectados</p>
+                        <div className="overflow-hidden rounded-[20px] border border-slate-200 bg-white">
+                          <table className="w-full text-sm">
+                            <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500">
                             <tr>
-                              <th className="px-3 py-2 font-semibold">Descripcion</th>
-                              <th className="px-3 py-2 font-semibold">ISBN</th>
-                              <th className="px-3 py-2 font-semibold">Pedido</th>
-                              <th className="px-3 py-2 font-semibold">Google</th>
-                              <th className="px-3 py-2 font-semibold">Código de Libro</th>
-                              {returnsEnabled && <th className="px-3 py-2 font-semibold text-right">Devolución</th>}
+                              <th className="px-3 py-3 font-semibold">Descripción</th>
+                              <th className="px-3 py-3 font-semibold">ISBN</th>
+                              <th className="px-3 py-3 font-semibold">Pedido</th>
+                              <th className="px-3 py-3 font-semibold">Código</th>
+                              <th className="px-3 py-3 font-semibold">Goog</th>
+                              <th className="px-3 py-3 font-semibold text-right">Acciones</th>
                             </tr>
-                          </thead>
-                          <tbody>
-                            {summarizedMochilaRecords.map((record) => (
-                              <tr key={record.key} className="border-t border-slate-200 align-top">
-                                <td className="px-3 py-2 text-slate-900">{record.description}</td>
-                                <td className="px-3 py-2 text-slate-900">{record.isbn}</td>
-                                <td className="px-3 py-2 text-slate-900">{record.orderId}</td>
-                                <td className="px-3 py-2 text-slate-900">{record.google}</td>
-                                <td className="px-3 py-2 break-all text-slate-900">{record.bookCode}</td>
-                                {returnsEnabled && (
-                                  <td className="px-3 py-2 text-right">
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      variant={selectedReturnItemKeys.includes(record.key) ? "default" : "outline"}
-                                      onClick={() => toggleReturnItemSelection(record.key)}
-                                    >
-                                      {selectedReturnItemKeys.includes(record.key) ? "Devolucion anadida" : "Devolucion"}
-                                    </Button>
-                                  </td>
-                                )}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                            </thead>
+                            <tbody>
+                              {summarizedMochilaRecords.map((record) => {
+                                const activeActions = selectedLineActions[record.key] ?? [];
+                                const isSelectedForReturn = activeActions.includes("return");
+                                const isSelectedMissingBook = activeActions.includes("missing_book");
+                                const hasSelectedActions = activeActions.length > 0;
+
+                                return (
+                                  <tr
+                                    key={record.key}
+                                    className={`border-t border-slate-200 align-top ${hasSelectedActions ? "bg-amber-50" : ""}`}
+                                  >
+                                    <td className="px-3 py-3 text-slate-900">{record.description}</td>
+                                    <td className="px-3 py-3 text-slate-900">{record.isbn}</td>
+                                    <td className="px-3 py-3 text-slate-900">{record.orderId}</td>
+                                    <td className="whitespace-nowrap px-3 py-3 text-slate-900">{record.bookCode}</td>
+                                    <td className="px-3 py-3 text-slate-900">{record.google}</td>
+                                    <td className="px-3 py-3 text-right">
+                                      <div className="flex justify-end gap-2">
+                                        <Button
+                                          type="button"
+                                          size="icon"
+                                          variant={isSelectedMissingBook ? "default" : "outline"}
+                                          className="h-9 w-9"
+                                          onClick={() => toggleLineAction(record.key, "missing_book")}
+                                          title="No ve el libro"
+                                        >
+                                          <BookX className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          size="icon"
+                                          variant={isSelectedForReturn ? "default" : "outline"}
+                                          className="h-9 w-9"
+                                          onClick={() => toggleLineAction(record.key, "return")}
+                                          title="Devolución"
+                                        >
+                                          <Undo2 className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                        <p className="text-xs text-slate-500">• Mostrando {summarizedMochilaRecords.length} libro(s)</p>
                       </div>
+                      {selectedActionItems.length > 0 && (
+                        <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
+                          Se guardarán {selectedActionItems.length} línea(s) con acciones marcadas en esta consulta.
+                        </div>
+                      )}
                       {returnsEnabled && selectedReturnItems.length > 0 && (
                         <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
                           Se guardarán {selectedReturnItems.length} línea(s) marcadas para devolución al crear el ticket.
                         </div>
                       )}
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <FormField
+                          control={form.control}
+                          name="observations"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Descripción / observaciones adicionales</FormLabel>
+                              <FormControl>
+                                <Textarea
+                                  placeholder="Si quieres, añade algún detalle adicional para el equipo técnico..."
+                                  className="min-h-[120px] resize-y bg-white"
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1028,6 +1373,33 @@ export default function NewEducationTicket() {
                 />
               )}
 
+              {shouldShowTeacherTicketFields && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField
+                    control={form.control}
+                    name="subjectType"
+                    render={({ field }) => (
+                      <FormItem className="hidden">
+                        <FormLabel>La consulta es sobre *</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecciona una opción" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="Alumno">Alumno</SelectItem>
+                            {supportsTeacherSubject && <SelectItem value="Docente">Docente</SelectItem>}
+                            <SelectItem value="SobreMiCuenta">Sobre mi cuenta</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
+
               {!shouldHideExtendedFields && (
                 <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1045,7 +1417,8 @@ export default function NewEducationTicket() {
                         </FormControl>
                         <SelectContent>
                           <SelectItem value="Alumno">Alumno</SelectItem>
-                          <SelectItem value="Docente">Sobre mi cuenta</SelectItem>
+                          {supportsTeacherSubject && <SelectItem value="Docente">Docente</SelectItem>}
+                          <SelectItem value="SobreMiCuenta">Sobre mi cuenta</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -1111,7 +1484,7 @@ export default function NewEducationTicket() {
                     <FormItem>
                       <FormLabel>Curso *</FormLabel>
                       <FormControl>
-                        <Input placeholder="Ej. 2º ESO" {...field} />
+                        <Input placeholder="Ej. 2Âº ESO" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -1211,10 +1584,10 @@ export default function NewEducationTicket() {
               <Button type="button" variant="outline" onClick={() => setLocation("/tickets")}>
                 Cancelar
               </Button>
-              {!shouldHideExtendedFields && (
+              {canSubmitForm && (
                 <Button type="submit" disabled={createMutation.isPending}>
                   {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Enviar consulta
+                  {subjectType === "Docente" ? "Enviar solicitud" : "Enviar consulta"}
                 </Button>
               )}
             </CardFooter>
@@ -1224,3 +1597,4 @@ export default function NewEducationTicket() {
     </div>
   );
 }
+

@@ -11,6 +11,7 @@ export const schoolsTable = dboSchema.table("SOP_schools", {
   name: nvarchar("name", { length: 255 }).notNull(),
   slug: nvarchar("slug", { length: 120 }).notNull(),
   code: nvarchar("code", { length: 80 }),
+  isHeadquarters: boolColumn("is_headquarters", false),
   active: boolColumn("active", true),
   createdAt: createdAtColumn(),
   updatedAt: updatedAtColumn(),

@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { db } from "@workspace/db";
-import { sessionsTable, usersTable } from "@workspace/db/schema";
+import { schoolsTable, sessionsTable, usersTable } from "@workspace/db/schema";
 import { eq, and, gt } from "drizzle-orm";
 import type { Request, Response, NextFunction } from "express";
 
@@ -32,11 +32,15 @@ export async function getSessionUser(token: string) {
       name: usersTable.name,
       role: usersTable.role,
       tenantId: usersTable.tenantId,
+      schoolId: usersTable.schoolId,
+      schoolName: schoolsTable.name,
+      scopeType: usersTable.scopeType,
       active: usersTable.active,
     })
     .top(1)
     .from(sessionsTable)
     .innerJoin(usersTable, eq(sessionsTable.userId, usersTable.id))
+    .leftJoin(schoolsTable, eq(usersTable.schoolId, schoolsTable.id))
     .where(and(eq(sessionsTable.sessionToken, token), gt(sessionsTable.expiresAt, new Date())));
   return result[0] ?? null;
 }

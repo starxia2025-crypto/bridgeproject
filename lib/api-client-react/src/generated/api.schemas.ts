@@ -30,8 +30,14 @@ export interface UserProfile {
   name: string;
   role: string;
   tenantId?: number | null;
+  schoolId?: number | null;
+  schoolName?: string | null;
+  scopeType?: "global" | "tenant" | "school";
   tenantName?: string | null;
   tenantSlug?: string | null;
+  tenantHasMochilasAccess?: boolean;
+  tenantHasOrderLookup?: boolean;
+  tenantHasReturnsAccess?: boolean;
   active: boolean;
   createdAt: string;
 }
@@ -42,7 +48,13 @@ export interface User {
   name: string;
   role: string;
   tenantId?: number | null;
+  schoolId?: number | null;
+  schoolName?: string | null;
+  scopeType?: "global" | "tenant" | "school";
   tenantName?: string | null;
+  tenantHasMochilasAccess?: boolean;
+  tenantHasOrderLookup?: boolean;
+  tenantHasReturnsAccess?: boolean;
   active: boolean;
   createdAt: string;
   lastLoginAt?: string | null;
@@ -54,6 +66,7 @@ export type CreateUserRequestRole =
 export const CreateUserRequestRole = {
   superadmin: "superadmin",
   admin_cliente: "admin_cliente",
+  manager: "manager",
   tecnico: "tecnico",
   usuario_cliente: "usuario_cliente",
   visor_cliente: "visor_cliente",
@@ -64,6 +77,8 @@ export interface CreateUserRequest {
   name: string;
   role: CreateUserRequestRole;
   tenantId?: number | null;
+  schoolId?: number | null;
+  scopeType?: "global" | "tenant" | "school";
   /** @minLength 8 */
   password: string;
 }
@@ -74,6 +89,7 @@ export type UpdateUserRequestRole =
 export const UpdateUserRequestRole = {
   superadmin: "superadmin",
   admin_cliente: "admin_cliente",
+  manager: "manager",
   tecnico: "tecnico",
   usuario_cliente: "usuario_cliente",
   visor_cliente: "visor_cliente",
@@ -84,6 +100,21 @@ export interface UpdateUserRequest {
   role?: UpdateUserRequestRole;
   active?: boolean;
   tenantId?: number | null;
+  schoolId?: number | null;
+  scopeType?: "global" | "tenant" | "school";
+}
+
+export interface SchoolSummary {
+  id: number;
+  tenantId: number;
+  parentSchoolId?: number | null;
+  name: string;
+  slug: string;
+  code?: string | null;
+  isHeadquarters?: boolean;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface UserListResponse {
@@ -102,6 +133,13 @@ export interface Tenant {
   logoUrl?: string | null;
   primaryColor?: string | null;
   contactEmail?: string | null;
+  sidebarBackgroundColor?: string | null;
+  sidebarTextColor?: string | null;
+  hasMochilasAccess?: boolean;
+  hasOrderLookup?: boolean;
+  hasReturnsAccess?: boolean;
+  quickLinks?: Array<{ label: string; url: string; icon: string }> | null;
+  schools?: SchoolSummary[];
   createdAt: string;
   totalUsers: number;
   totalTickets: number;
@@ -113,6 +151,13 @@ export interface CreateTenantRequest {
   slug: string;
   contactEmail?: string | null;
   primaryColor?: string | null;
+  sidebarBackgroundColor?: string | null;
+  sidebarTextColor?: string | null;
+  hasMochilasAccess?: boolean;
+  hasOrderLookup?: boolean;
+  hasReturnsAccess?: boolean;
+  quickLinks?: Array<{ label: string; url: string; icon: string }>;
+  schools?: Array<{ id?: number; name: string; code?: string | null; isHeadquarters?: boolean; active?: boolean }>;
 }
 
 export interface UpdateTenantRequest {
@@ -121,6 +166,13 @@ export interface UpdateTenantRequest {
   active?: boolean;
   primaryColor?: string | null;
   logoUrl?: string | null;
+  sidebarBackgroundColor?: string | null;
+  sidebarTextColor?: string | null;
+  hasMochilasAccess?: boolean;
+  hasOrderLookup?: boolean;
+  hasReturnsAccess?: boolean;
+  quickLinks?: Array<{ label: string; url: string; icon: string }>;
+  schools?: Array<{ id?: number; name: string; code?: string | null; isHeadquarters?: boolean; active?: boolean }>;
 }
 
 export interface TenantListResponse {
@@ -165,6 +217,8 @@ export interface Ticket {
   category?: string | null;
   tenantId: number;
   tenantName: string;
+  schoolId?: number | null;
+  schoolName?: string | null;
   createdById: number;
   createdByName: string;
   assignedToId?: number | null;
@@ -229,6 +283,7 @@ export interface CreateTicketRequest {
   priority?: CreateTicketRequestPriority;
   category?: string | null;
   tenantId: number;
+  schoolId?: number | null;
   customFields?: CreateTicketRequestCustomFields;
 }
 
@@ -249,6 +304,7 @@ export interface UpdateTicketRequest {
   description?: string;
   priority?: UpdateTicketRequestPriority;
   category?: string | null;
+  schoolId?: number | null;
   customFields?: UpdateTicketRequestCustomFields;
 }
 

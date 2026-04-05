@@ -1,4 +1,4 @@
-export type CustomFetchOptions = RequestInit & {
+﻿export type CustomFetchOptions = RequestInit & {
   responseType?: "json" | "text" | "blob" | "auto";
 };
 
@@ -51,7 +51,7 @@ function resolveMethod(input: RequestInfo | URL, explicitMethod?: string): strin
   return "GET";
 }
 
-// Use loose check for URL — some runtimes (e.g. React Native) polyfill URL
+// Use loose check for URL â€” some runtimes (e.g. React Native) polyfill URL
 // differently, so `instanceof URL` can fail.
 function isUrl(input: RequestInfo | URL): input is URL {
   return typeof URL !== "undefined" && input instanceof URL;
@@ -110,7 +110,7 @@ function isTextMediaType(mediaType: string | null): boolean {
 
 // Use strict equality: in browsers, `response.body` is `null` when the
 // response genuinely has no content.  In React Native, `response.body` is
-// always `undefined` because the ReadableStream API is not implemented —
+// always `undefined` because the ReadableStream API is not implemented â€”
 // even when the response carries a full payload readable via `.text()` or
 // `.json()`.  Loose equality (`== null`) matches both `null` and `undefined`,
 // which causes every React Native response to be treated as empty.
@@ -142,15 +142,56 @@ function getStringField(value: unknown, key: string): string | undefined {
 }
 
 function truncate(text: string, maxLength = 300): string {
-  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}â€¦` : text;
+}
+
+function defaultStatusMessage(status: number): string {
+  switch (status) {
+    case 400:
+      return "La solicitud no es valida.";
+    case 401:
+      return "No se pudo iniciar sesion con esos datos.";
+    case 403:
+      return "No tienes permisos para realizar esta accion.";
+    case 404:
+      return "No se encontro la informacion solicitada.";
+    case 409:
+      return "Ya existe un registro con esos datos.";
+    case 422:
+      return "Hay datos pendientes de revisar.";
+    case 500:
+      return "Se ha producido un error interno en el servidor.";
+    case 503:
+      return "El servicio no esta disponible en este momento.";
+    default:
+      return "No se pudo completar la accion solicitada.";
+  }
+}
+
+function normalizeUserMessage(message: string | undefined, status: number): string {
+  const normalized = message?.trim();
+  if (!normalized) {
+    return defaultStatusMessage(status);
+  }
+
+  if (normalized.startsWith("<!DOCTYPE") || normalized.startsWith("<html") || normalized.startsWith("<body")) {
+    return defaultStatusMessage(status);
+  }
+
+  const lower = normalized.toLowerCase();
+
+  if (lower.includes("not found")) return "No se encontro la informacion solicitada.";
+  if (lower.includes("unauthorized")) return "No se pudo iniciar sesion con esos datos.";
+  if (lower.includes("forbidden") || lower.includes("access denied")) return "No tienes permisos para realizar esta accion.";
+  if (lower.includes("internal server error")) return "Se ha producido un error interno en el servidor.";
+  if (lower.includes("failed to fetch")) return "No se pudo conectar con el servidor. Intentalo de nuevo en unos segundos.";
+
+  return normalized;
 }
 
 function buildErrorMessage(response: Response, data: unknown): string {
-  const prefix = `HTTP ${response.status} ${response.statusText}`;
-
   if (typeof data === "string") {
-    const text = data.trim();
-    return text ? `${prefix}: ${truncate(text)}` : prefix;
+    return normalizeUserMessage(truncate(data.trim()), response.status);
   }
 
   const title = getStringField(data, "title");
@@ -160,12 +201,12 @@ function buildErrorMessage(response: Response, data: unknown): string {
     getStringField(data, "error_description") ??
     getStringField(data, "error");
 
-  if (title && detail) return `${prefix}: ${title} — ${detail}`;
-  if (detail) return `${prefix}: ${detail}`;
-  if (message) return `${prefix}: ${message}`;
-  if (title) return `${prefix}: ${title}`;
+  if (title && detail) return normalizeUserMessage(`${title}: ${detail}`, response.status);
+  if (detail) return normalizeUserMessage(detail, response.status);
+  if (message) return normalizeUserMessage(message, response.status);
+  if (title) return normalizeUserMessage(title, response.status);
 
-  return prefix;
+  return defaultStatusMessage(response.status);
 }
 
 export class ApiError<T = unknown> extends Error {
@@ -371,3 +412,4 @@ export async function customFetch<T = unknown>(
 
   return (await parseSuccessBody(response, responseType, requestInfo)) as T;
 }
+

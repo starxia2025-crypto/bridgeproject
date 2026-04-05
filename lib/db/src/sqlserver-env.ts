@@ -12,10 +12,10 @@ function optionalBoolean(name: string, fallback: boolean): boolean {
   return value === "1" || value === "true" || value === "yes";
 }
 
-export function getSqlServerConfig() {
+export function getSqlServerConfig(databaseOverride?: string) {
   const server = required("SQLSERVER_HOST");
   const port = Number(process.env["SQLSERVER_PORT"]?.trim() || "1433");
-  const database = required("SQLSERVER_DATABASE");
+  const database = databaseOverride ?? required("SQLSERVER_DATABASE");
   const user = required("SQLSERVER_USER");
   const password = required("SQLSERVER_PASSWORD");
   const encrypt = optionalBoolean("SQLSERVER_ENCRYPT", true);
@@ -45,4 +45,8 @@ export function getSqlServerConnectionString() {
     `Encrypt=${config.options.encrypt}`,
     `TrustServerCertificate=${config.options.trustServerCertificate}`,
   ].join(";");
+}
+
+export function getMochilasSqlServerConfig() {
+  return getSqlServerConfig(process.env["SQLSERVER_MOCHILAS_DATABASE"]?.trim() || "PROTECNICOSDB");
 }

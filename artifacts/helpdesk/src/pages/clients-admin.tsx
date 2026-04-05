@@ -55,6 +55,9 @@ const tenantFormSchema = z.object({
   contactEmail: z.union([z.literal(""), z.string().trim().email("Introduce un email valido")]).optional(),
   sidebarBackgroundColor: z.string().min(1, "Selecciona un color para el menu"),
   sidebarTextColor: z.string().min(1, "Selecciona un color de texto"),
+  hasMochilasAccess: z.boolean().default(false),
+  hasOrderLookup: z.boolean().default(false),
+  hasReturnsAccess: z.boolean().default(false),
 });
 
 type TenantFormValues = z.infer<typeof tenantFormSchema>;
@@ -63,6 +66,14 @@ type QuickLinkDraft = {
   label: string;
   url: string;
   icon: string;
+};
+type SchoolDraft = {
+  id?: number;
+  localId: string;
+  name: string;
+  code: string;
+  isHeadquarters: boolean;
+  active: boolean;
 };
 type TenantRow = {
   id: number;
@@ -76,7 +87,11 @@ type TenantRow = {
   contactEmail?: string | null;
   sidebarBackgroundColor?: string | null;
   sidebarTextColor?: string | null;
+  hasMochilasAccess?: boolean | null;
+  hasOrderLookup?: boolean | null;
+  hasReturnsAccess?: boolean | null;
   quickLinks?: Array<{ label: string; url: string; icon: string }> | null;
+  schools?: Array<{ id: number; name: string; code?: string | null; isHeadquarters?: boolean; active: boolean }> | null;
 };
 
 function slugifyTenantName(name: string) {
@@ -96,6 +111,16 @@ function createEmptyQuickLink(): QuickLinkDraft {
     label: "",
     url: "",
     icon: "",
+  };
+}
+
+function createEmptySchool(): SchoolDraft {
+  return {
+    localId: crypto.randomUUID(),
+    name: "",
+    code: "",
+    isHeadquarters: false,
+    active: true,
   };
 }
 
@@ -124,6 +149,19 @@ function mapQuickLinksToDrafts(quickLinks?: Array<{ label: string; url: string; 
   }));
 }
 
+function mapSchoolsToDrafts(schools?: Array<{ id: number; name: string; code?: string | null; isHeadquarters?: boolean; active: boolean }> | null): SchoolDraft[] {
+  if (!Array.isArray(schools)) return [];
+
+  return schools.map((school) => ({
+    id: school.id,
+    localId: crypto.randomUUID(),
+    name: school.name ?? "",
+    code: school.code ?? "",
+    isHeadquarters: Boolean(school.isHeadquarters),
+    active: school.active,
+  }));
+}
+
 export default function ClientsAdmin() {
   const { data: currentUser } = useGetMe();
   const [search, setSearch] = useState("");
@@ -131,6 +169,7 @@ export default function ClientsAdmin() {
   const [open, setOpen] = useState(false);
   const [editingTenant, setEditingTenant] = useState<TenantRow | null>(null);
   const [quickLinks, setQuickLinks] = useState<QuickLinkDraft[]>([]);
+  const [schools, setSchools] = useState<SchoolDraft[]>([]);
 
   const { data: tenantsData, isLoading, refetch } = useListTenants({
     page,
@@ -150,6 +189,9 @@ export default function ClientsAdmin() {
       contactEmail: "",
       sidebarBackgroundColor: "#0f172a",
       sidebarTextColor: "#ffffff",
+      hasMochilasAccess: false,
+      hasOrderLookup: false,
+      hasReturnsAccess: false,
     },
   });
 
@@ -159,11 +201,15 @@ export default function ClientsAdmin() {
   function resetTenantForm() {
     setEditingTenant(null);
     setQuickLinks([]);
+    setSchools([]);
     form.reset({
       name: "",
       contactEmail: "",
       sidebarBackgroundColor: "#0f172a",
       sidebarTextColor: "#ffffff",
+      hasMochilasAccess: false,
+      hasOrderLookup: false,
+      hasReturnsAccess: false,
     });
   }
 
@@ -175,11 +221,15 @@ export default function ClientsAdmin() {
   function openEditDialog(tenant: TenantRow) {
     setEditingTenant(tenant);
     setQuickLinks(mapQuickLinksToDrafts(tenant.quickLinks));
+    setSchools(mapSchoolsToDrafts(tenant.schools));
     form.reset({
       name: tenant.name,
       contactEmail: tenant.contactEmail ?? "",
       sidebarBackgroundColor: tenant.sidebarBackgroundColor || "#0f172a",
       sidebarTextColor: tenant.sidebarTextColor || "#ffffff",
+      hasMochilasAccess: Boolean(tenant.hasMochilasAccess),
+      hasOrderLookup: Boolean(tenant.hasOrderLookup),
+      hasReturnsAccess: Boolean(tenant.hasReturnsAccess),
     });
     setOpen(true);
   }
@@ -259,6 +309,25 @@ export default function ClientsAdmin() {
       });
   }
 
+  function normalizeSchools() {
+    const normalized = schools
+      .filter((school) => school.name.trim())
+      .map((school) => ({
+        ...(school.id ? { id: school.id } : {}),
+        name: school.name.trim(),
+        code: school.code.trim() || null,
+        isHeadquarters: school.isHeadquarters,
+        active: school.active,
+      }));
+
+    const headquarters = normalized.filter((school) => school.isHeadquarters);
+    if (headquarters.length > 1) {
+      throw new Error("Solo puede haber un colegio matriz marcado como principal.");
+    }
+
+    return normalized;
+  }
+
   function onSubmit(values: TenantFormValues) {
     if (!canManageTenants) {
       toast({
@@ -271,12 +340,17 @@ export default function ClientsAdmin() {
 
     try {
       const normalizedQuickLinks = normalizeQuickLinks();
+      const normalizedSchools = normalizeSchools();
       const payload = {
         name: values.name.trim(),
         ...(values.contactEmail ? { contactEmail: values.contactEmail.trim().toLowerCase() } : { contactEmail: null }),
         sidebarBackgroundColor: values.sidebarBackgroundColor,
         sidebarTextColor: values.sidebarTextColor,
+        hasMochilasAccess: values.hasMochilasAccess,
+        hasOrderLookup: values.hasOrderLookup,
+        hasReturnsAccess: values.hasReturnsAccess,
         quickLinks: normalizedQuickLinks,
+        schools: normalizedSchools,
       } as any;
 
       if (editingTenant) {
@@ -306,12 +380,37 @@ export default function ClientsAdmin() {
     setQuickLinks((current) => [...current, createEmptyQuickLink()]);
   }
 
+  function addSchool() {
+    setSchools((current) => [...current, createEmptySchool()]);
+  }
+
   function updateQuickLink(id: string, changes: Partial<QuickLinkDraft>) {
     setQuickLinks((current) => current.map((link) => (link.id === id ? { ...link, ...changes } : link)));
   }
 
   function removeQuickLink(id: string) {
     setQuickLinks((current) => current.filter((link) => link.id !== id));
+  }
+
+  function updateSchool(localId: string, changes: Partial<SchoolDraft>) {
+    setSchools((current) => current.map((school) => {
+      if (school.localId !== localId) return school;
+
+      const next = { ...school, ...changes };
+      if (changes.isHeadquarters) {
+        return { ...next, isHeadquarters: true };
+      }
+      return next;
+    }).map((school) => {
+      if (changes.isHeadquarters && school.localId !== localId) {
+        return { ...school, isHeadquarters: false };
+      }
+      return school;
+    }));
+  }
+
+  function removeSchool(localId: string) {
+    setSchools((current) => current.filter((school) => school.localId !== localId));
   }
 
   function onShortcutIconSelected(id: string, file?: File | null) {
@@ -447,6 +546,87 @@ export default function ClientsAdmin() {
                       />
                     </div>
 
+                    <FormField
+                      control={form.control}
+                      name="hasMochilasAccess"
+                      render={({ field }) => (
+                        <FormItem>
+                          <div className="flex items-start gap-3 rounded-xl border px-4 py-3">
+                            <input
+                              id="tenant-has-mochilas-access"
+                              type="checkbox"
+                              className="mt-1 h-4 w-4 rounded border-slate-300"
+                              checked={field.value}
+                              onChange={(event) => field.onChange(event.target.checked)}
+                            />
+                            <div className="space-y-1">
+                              <FormLabel htmlFor="tenant-has-mochilas-access" className="cursor-pointer text-sm font-semibold text-slate-900">
+                                Buscar mochilas
+                              </FormLabel>
+                              <p className="text-xs text-slate-500">
+                                Permite que los tickets de consulta busquen datos del alumno en la base de datos de Mochilas usando su correo.
+                              </p>
+                            </div>
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="hasOrderLookup"
+                      render={({ field }) => (
+                        <FormItem>
+                          <div className="flex items-start gap-3 rounded-xl border px-4 py-3">
+                            <input
+                              id="tenant-has-order-lookup"
+                              type="checkbox"
+                              className="mt-1 h-4 w-4 rounded border-slate-300"
+                              checked={field.value}
+                              onChange={(event) => field.onChange(event.target.checked)}
+                            />
+                            <div className="space-y-1">
+                              <FormLabel htmlFor="tenant-has-order-lookup" className="cursor-pointer text-sm font-semibold text-slate-900">
+                                Buscar pedidos
+                              </FormLabel>
+                              <p className="text-xs text-slate-500">
+                                Permite que los tickets de consulta busquen informacion en Mochilas usando el numero de pedido.
+                              </p>
+                            </div>
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="hasReturnsAccess"
+                      render={({ field }) => (
+                        <FormItem>
+                          <div className="flex items-start gap-3 rounded-xl border px-4 py-3">
+                            <input
+                              id="tenant-has-returns-access"
+                              type="checkbox"
+                              className="mt-1 h-4 w-4 rounded border-slate-300"
+                              checked={field.value}
+                              onChange={(event) => field.onChange(event.target.checked)}
+                            />
+                            <div className="space-y-1">
+                              <FormLabel htmlFor="tenant-has-returns-access" className="cursor-pointer text-sm font-semibold text-slate-900">
+                                Activar devoluciones
+                              </FormLabel>
+                              <p className="text-xs text-slate-500">
+                                Muestra acciones de devolucion por linea al revisar mochilas o pedidos dentro de los tickets.
+                              </p>
+                            </div>
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
                     <div className="rounded-2xl border p-4">
                       <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
                         <LinkIcon className="h-4 w-4" />
@@ -460,6 +640,60 @@ export default function ClientsAdmin() {
                           <div className="mt-3 border-t border-white/20 pt-3 text-base font-bold">{form.watch("name") || "Nombre del colegio"}</div>
                         </div>
                       </div>
+                    </div>
+
+                    <div className="space-y-3 rounded-2xl border p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">Estructura de colegios</p>
+                          <p className="text-xs text-slate-500">Define el colegio matriz y los subcolegios que forman parte de esta red educativa.</p>
+                        </div>
+                        <Button type="button" variant="outline" className="gap-2" onClick={addSchool}>
+                          <Plus className="h-4 w-4" />
+                          Anadir subcolegio
+                        </Button>
+                      </div>
+
+                      {schools.length === 0 ? (
+                        <div className="rounded-xl border border-dashed px-4 py-6 text-sm text-slate-500">
+                          Todavia no hay subcolegios configurados. Puedes guardar solo la red educativa principal o anadir ahora sus centros asociados.
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {schools.map((school, index) => (
+                            <div key={school.localId} className="rounded-xl border p-4">
+                              <div className="mb-4 flex items-center justify-between gap-3">
+                                <div>
+                                  <p className="text-sm font-semibold text-slate-900">Colegio {index + 1}</p>
+                                  <p className="text-xs text-slate-500">{school.isHeadquarters ? "Colegio matriz" : "Subcolegio de la red"}</p>
+                                </div>
+                                <Button type="button" variant="ghost" size="icon" onClick={() => removeSchool(school.localId)}>
+                                  <Trash2 className="h-4 w-4 text-slate-500" />
+                                </Button>
+                              </div>
+                              <div className="grid gap-4 md:grid-cols-[1.3fr_0.8fr_auto]">
+                                <Input
+                                  placeholder="Ej. Antamira"
+                                  value={school.name}
+                                  onChange={(event) => updateSchool(school.localId, { name: event.target.value })}
+                                />
+                                <Input
+                                  placeholder="Codigo interno"
+                                  value={school.code}
+                                  onChange={(event) => updateSchool(school.localId, { code: event.target.value })}
+                                />
+                                <Button
+                                  type="button"
+                                  variant={school.isHeadquarters ? "default" : "outline"}
+                                  onClick={() => updateSchool(school.localId, { isHeadquarters: !school.isHeadquarters })}
+                                >
+                                  {school.isHeadquarters ? "Matriz" : "Marcar matriz"}
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-3 rounded-2xl border p-4">
@@ -608,7 +842,12 @@ export default function ClientsAdmin() {
                       </div>
                       <div>
                         <div className="font-medium text-slate-900 dark:text-slate-100">{tenant.name}</div>
-                        <div className="text-xs text-slate-500">{tenant.slug}</div>
+                        <div className="text-xs text-slate-500">
+                          {tenant.slug} · {(tenant.schools ?? []).filter((school) => school.active).length} colegios asociados
+                          {tenant.hasMochilasAccess ? " · Buscar mochilas" : ""}
+                          {tenant.hasOrderLookup ? " · Buscar pedidos" : ""}
+                          {tenant.hasReturnsAccess ? " · Activar devoluciones" : ""}
+                        </div>
                       </div>
                     </div>
                   </TableCell>

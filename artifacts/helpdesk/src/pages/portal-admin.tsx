@@ -233,7 +233,15 @@ export default function PortalAdmin() {
 
   return (
     <div className="space-y-8">
-      <div className="relative overflow-hidden rounded-2xl bg-primary p-8 text-primary-foreground shadow-lg md:p-12">
+      <div className="space-y-4">
+        <div className="space-y-2 text-center">
+          <h1 className="text-4xl font-bold tracking-tight text-slate-950 md:text-5xl">Centro de ayuda Macmillan</h1>
+          <p className="mx-auto max-w-3xl text-lg text-slate-600">
+            Consulta manuales de uso, videos explicativos, enlaces utiles, preguntas frecuentes y requisitos de acceso en un solo lugar.
+          </p>
+        </div>
+
+        <div className="relative overflow-hidden rounded-2xl bg-primary p-6 text-primary-foreground shadow-lg md:p-8">
         <div className="absolute inset-0 z-0 opacity-10">
           <svg className="h-full w-full" xmlns="http://www.w3.org/2000/svg">
             <defs>
@@ -245,9 +253,7 @@ export default function PortalAdmin() {
           </svg>
         </div>
 
-        <div className="relative z-10 mx-auto max-w-3xl space-y-6 text-center">
-          <h1 className="text-4xl font-bold tracking-tight md:text-5xl">Centro de ayuda Macmillan</h1>
-          <p className="text-lg text-primary-foreground/80">Publica manuales, videos, enlaces, FAQs y archivos descargables para cada cliente desde el mismo portal.</p>
+        <div className="relative z-10 mx-auto max-w-3xl space-y-5 text-center">
 
           <div className="relative mx-auto max-w-xl">
             <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
@@ -366,6 +372,7 @@ export default function PortalAdmin() {
               </DialogContent>
             </Dialog>
           )}
+        </div>
         </div>
       </div>
 

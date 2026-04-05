@@ -40,6 +40,7 @@ function formatTicketFieldLabel(key: string) {
     subject: "Asignatura",
     observations: "Observaciones",
     activationRequested: "Activacion urgente",
+    returnRequested: "Devolucion solicitada",
   };
 
   return labels[key] ?? key;
@@ -149,11 +150,17 @@ export default function TicketDetail() {
       "subject",
       "observations",
       "activationRequested",
+      "returnRequested",
+      "returnItems",
       "mochilaLookup",
       "school",
     ]);
 
     return Object.entries(ticket.customFields).filter(([key, value]) => !hidden.has(key) && value !== null && value !== undefined && String(value).trim() !== "");
+  }, [ticket]);
+  const returnItems = useMemo(() => {
+    const raw = ticket?.customFields?.returnItems;
+    return Array.isArray(raw) ? raw : [];
   }, [ticket]);
 
   if (ticketLoading) {
@@ -328,6 +335,38 @@ export default function TicketDetail() {
               ) : (
                 <div className="rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
                   Esta consulta no tiene datos adicionales de incidencia guardados.
+                </div>
+              )}
+              {returnItems.length > 0 && (
+                <div className="space-y-3 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">Lineas marcadas para devolución</p>
+                    <p className="mt-1 text-xs text-slate-500">Estas lineas se seleccionaron durante la revisión de Mochilas o del pedido.</p>
+                  </div>
+                  <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                        <tr>
+                          <th className="px-3 py-2 font-semibold">Descripcion</th>
+                          <th className="px-3 py-2 font-semibold">ISBN</th>
+                          <th className="px-3 py-2 font-semibold">Pedido</th>
+                          <th className="px-3 py-2 font-semibold">Google</th>
+                          <th className="px-3 py-2 font-semibold">Codigo de libro</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {returnItems.map((item: any, index) => (
+                          <tr key={item.key ?? `${item.orderId}-${item.isbn}-${index}`} className="border-t border-slate-200">
+                            <td className="px-3 py-2 text-slate-900">{item.description ?? "-"}</td>
+                            <td className="px-3 py-2 text-slate-900">{item.isbn ?? "-"}</td>
+                            <td className="px-3 py-2 text-slate-900">{item.orderId ?? "-"}</td>
+                            <td className="px-3 py-2 text-slate-900">{item.google ?? "-"}</td>
+                            <td className="px-3 py-2 break-all text-slate-900">{item.bookCode ?? "-"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </CardContent>

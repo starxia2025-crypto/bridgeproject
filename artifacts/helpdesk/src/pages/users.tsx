@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useCreateUser, useGetMe, useListTenants, useListUsers, useUpdateUser } from "@workspace/api-client-react";
+import { useCreateUser, useGetMe, useGetTenant, useListTenants, useListUsers, useUpdateUser } from "@workspace/api-client-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -49,6 +49,8 @@ const createUserSchema = z.object({
   email: z.string().email("Introduce un correo valido"),
   role: z.string().min(1, "Selecciona un rol"),
   tenantId: z.coerce.number().optional(),
+  schoolId: z.coerce.number().optional(),
+  scopeType: z.enum(["global", "tenant", "school"]),
   password: z.string().min(8, "La contrasena debe tener al menos 8 caracteres"),
 });
 
@@ -56,6 +58,8 @@ const editUserSchema = z.object({
   name: z.string().min(2, "Indica el nombre del usuario"),
   role: z.string().min(1, "Selecciona un rol"),
   tenantId: z.coerce.number().optional(),
+  schoolId: z.coerce.number().optional(),
+  scopeType: z.enum(["global", "tenant", "school"]),
   active: z.boolean(),
 });
 
@@ -68,6 +72,9 @@ type UserRow = {
   role: string;
   tenantId?: number | null;
   tenantName?: string | null;
+  schoolId?: number | null;
+  schoolName?: string | null;
+  scopeType?: "global" | "tenant" | "school";
   active: boolean;
   lastLoginAt?: string | null;
 };
@@ -91,18 +98,29 @@ export default function Users() {
 
   const { data: tenantsData } = useListTenants(
     { page: 1, limit: 100 },
-    { query: { enabled: currentUser?.role === "superadmin" } },
+    { query: { enabled: currentUser?.role === "superadmin" || currentUser?.role === "tecnico" } },
   );
+  const { data: currentTenantData } = useGetTenant(currentUser?.tenantId ?? 0, {
+    query: { enabled: !!currentUser?.tenantId && currentUser?.role === "admin_cliente" },
+  });
+
+  const availableTenants = useMemo(() => {
+    if (currentUser?.role === "superadmin" || currentUser?.role === "tecnico") {
+      return tenantsData?.data ?? [];
+    }
+
+    return currentTenantData ? [currentTenantData] : [];
+  }, [currentTenantData, currentUser?.role, tenantsData?.data]);
 
   const sortedUsers = useMemo(() => {
     const rows = [...(usersData?.data ?? [])] as UserRow[];
     return rows.sort((a, b) => {
-      const schoolA = (a.tenantName || currentUser?.tenantName || "Sin colegio").toLocaleLowerCase("es");
-      const schoolB = (b.tenantName || currentUser?.tenantName || "Sin colegio").toLocaleLowerCase("es");
+      const schoolA = (a.schoolName || a.tenantName || currentUser?.schoolName || currentUser?.tenantName || "Sin colegio").toLocaleLowerCase("es");
+      const schoolB = (b.schoolName || b.tenantName || currentUser?.schoolName || currentUser?.tenantName || "Sin colegio").toLocaleLowerCase("es");
       if (schoolA !== schoolB) return schoolA.localeCompare(schoolB, "es");
       return a.name.localeCompare(b.name, "es");
     });
-  }, [usersData?.data, currentUser?.tenantName]);
+  }, [usersData?.data, currentUser?.schoolName, currentUser?.tenantName]);
 
   const availableRoles = useMemo(() => {
     if (currentUser?.role === "superadmin") {
@@ -116,15 +134,46 @@ export default function Users() {
       ];
     }
 
+    if (currentUser?.role === "tecnico") {
+      return [
+        "admin_cliente",
+        "manager",
+        "tecnico",
+        "usuario_cliente",
+        "visor_cliente",
+      ];
+    }
+
     return ["admin_cliente", "manager", "usuario_cliente", "visor_cliente"];
   }, [currentUser?.role]);
 
+  function getDefaultScopeForRole(role: string) {
+    switch (role) {
+      case "superadmin":
+      case "tecnico":
+        return "global" as const;
+      case "admin_cliente":
+      case "visor_cliente":
+        return "tenant" as const;
+      default:
+        return "school" as const;
+    }
+  }
+
   const createForm = useForm<CreateUserValues>({
     resolver: zodResolver(createUserSchema.superRefine((values, ctx) => {
-      if (currentUser?.role === "superadmin" && !values.tenantId && values.role !== "superadmin") {
+      if (values.scopeType === "tenant" && !values.tenantId) {
         ctx.addIssue({
           code: "custom",
           path: ["tenantId"],
+          message: "Selecciona la red educativa del nuevo usuario",
+        });
+      }
+
+      if (values.scopeType === "school" && !values.schoolId) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["schoolId"],
           message: "Selecciona el colegio del nuevo usuario",
         });
       }
@@ -134,16 +183,26 @@ export default function Users() {
       email: "",
       role: currentUser?.role === "superadmin" ? "admin_cliente" : "manager",
       tenantId: currentUser?.tenantId ?? undefined,
+      schoolId: currentUser?.schoolId ?? undefined,
+      scopeType: getDefaultScopeForRole(currentUser?.role === "superadmin" ? "admin_cliente" : "manager"),
       password: "",
     },
   });
 
   const editForm = useForm<EditUserValues>({
     resolver: zodResolver(editUserSchema.superRefine((values, ctx) => {
-      if (currentUser?.role === "superadmin" && !values.tenantId && values.role !== "superadmin") {
+      if (values.scopeType === "tenant" && !values.tenantId) {
         ctx.addIssue({
           code: "custom",
           path: ["tenantId"],
+          message: "Selecciona la red educativa del usuario",
+        });
+      }
+
+      if (values.scopeType === "school" && !values.schoolId) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["schoolId"],
           message: "Selecciona el colegio del usuario",
         });
       }
@@ -152,12 +211,29 @@ export default function Users() {
       name: "",
       role: currentUser?.role === "superadmin" ? "admin_cliente" : "manager",
       tenantId: currentUser?.tenantId ?? undefined,
+      schoolId: currentUser?.schoolId ?? undefined,
+      scopeType: getDefaultScopeForRole(currentUser?.role === "superadmin" ? "admin_cliente" : "manager"),
       active: true,
     },
   });
 
-  const selectedCreateRole = createForm.watch("role");
-  const selectedEditRole = editForm.watch("role");
+  const selectedCreateScopeType = createForm.watch("scopeType");
+  const selectedCreateTenantId = createForm.watch("tenantId");
+  const selectedEditScopeType = editForm.watch("scopeType");
+  const selectedEditTenantId = editForm.watch("tenantId");
+
+  const createTenantOptions = useMemo(() => availableTenants, [availableTenants]);
+  const editTenantOptions = useMemo(() => availableTenants, [availableTenants]);
+
+  const createSchoolOptions = useMemo(() => {
+    const tenant = createTenantOptions.find((item) => item.id === selectedCreateTenantId);
+    return (tenant?.schools ?? []).filter((school) => school.active);
+  }, [createTenantOptions, selectedCreateTenantId]);
+
+  const editSchoolOptions = useMemo(() => {
+    const tenant = editTenantOptions.find((item) => item.id === selectedEditTenantId);
+    return (tenant?.schools ?? []).filter((school) => school.active);
+  }, [editTenantOptions, selectedEditTenantId]);
 
   function resetCreateForm() {
     createForm.reset({
@@ -165,6 +241,8 @@ export default function Users() {
       email: "",
       role: currentUser?.role === "superadmin" ? "admin_cliente" : "manager",
       tenantId: currentUser?.tenantId ?? undefined,
+      schoolId: currentUser?.schoolId ?? undefined,
+      scopeType: getDefaultScopeForRole(currentUser?.role === "superadmin" ? "admin_cliente" : "manager"),
       password: "",
     });
   }
@@ -175,6 +253,8 @@ export default function Users() {
       name: user.name,
       role: user.role,
       tenantId: user.tenantId ?? undefined,
+      schoolId: user.schoolId ?? undefined,
+      scopeType: user.scopeType ?? getDefaultScopeForRole(user.role),
       active: user.active,
     });
     setEditOpen(true);
@@ -247,11 +327,13 @@ export default function Users() {
     }
 
     const tenantId =
-      currentUser?.role === "superadmin"
-        ? values.role === "superadmin"
-          ? null
-          : (values.tenantId ?? null)
-        : (currentUser?.tenantId ?? null);
+      values.scopeType === "global"
+        ? null
+        : currentUser?.role === "superadmin" || currentUser?.role === "tecnico"
+          ? (values.tenantId ?? null)
+          : (currentUser?.tenantId ?? null);
+
+    const schoolId = values.scopeType === "school" ? (values.schoolId ?? null) : null;
 
     createUser.mutate({
       data: {
@@ -259,6 +341,8 @@ export default function Users() {
         email: normalizedEmail,
         role: values.role as never,
         tenantId,
+        schoolId,
+        scopeType: values.scopeType,
         password: values.password,
       },
     });
@@ -268,11 +352,13 @@ export default function Users() {
     if (!editingUser) return;
 
     const tenantId =
-      currentUser?.role === "superadmin"
-        ? values.role === "superadmin"
-          ? null
-          : (values.tenantId ?? null)
-        : (currentUser?.tenantId ?? null);
+      values.scopeType === "global"
+        ? null
+        : currentUser?.role === "superadmin" || currentUser?.role === "tecnico"
+          ? (values.tenantId ?? null)
+          : (currentUser?.tenantId ?? null);
+
+    const schoolId = values.scopeType === "school" ? (values.schoolId ?? null) : null;
 
     updateUser.mutate({
       userId: editingUser.id,
@@ -280,6 +366,8 @@ export default function Users() {
         name: values.name,
         role: values.role as never,
         tenantId,
+        schoolId,
+        scopeType: values.scopeType,
         active: values.active,
       },
     });
@@ -342,7 +430,20 @@ export default function Users() {
                   <FormField control={createForm.control} name="role" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Rol</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          const nextScope = getDefaultScopeForRole(value);
+                          createForm.setValue("scopeType", nextScope);
+                          if (nextScope === "global") {
+                            createForm.setValue("tenantId", undefined);
+                            createForm.setValue("schoolId", undefined);
+                          } else if (nextScope === "tenant") {
+                            createForm.setValue("schoolId", undefined);
+                          }
+                        }}
+                        value={field.value}
+                      >
                         <FormControl><SelectTrigger><SelectValue placeholder="Selecciona un rol" /></SelectTrigger></FormControl>
                         <SelectContent>
                           {availableRoles.map((role) => (
@@ -354,22 +455,56 @@ export default function Users() {
                     </FormItem>
                   )} />
 
-                  {currentUser?.role === "superadmin" ? (
+                  <FormField control={createForm.control} name="scopeType" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Ambito de acceso</FormLabel>
+                      <Select
+                        onValueChange={(value) => {
+                          field.onChange(value as "global" | "tenant" | "school");
+                          if (value === "global") {
+                            createForm.setValue("tenantId", undefined);
+                            createForm.setValue("schoolId", undefined);
+                          }
+                          if (value === "tenant") {
+                            createForm.setValue("schoolId", undefined);
+                          }
+                        }}
+                        value={field.value}
+                      >
+                        <FormControl><SelectTrigger><SelectValue placeholder="Selecciona el alcance" /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          {(currentUser?.role === "superadmin" || currentUser?.role === "tecnico") && (
+                            <SelectItem value="global">Todo el sistema</SelectItem>
+                          )}
+                          <SelectItem value="tenant">Toda la red educativa</SelectItem>
+                          <SelectItem value="school">Solo un colegio</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  {(currentUser?.role === "superadmin" || currentUser?.role === "tecnico") ? (
                     <FormField control={createForm.control} name="tenantId" render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Colegio</FormLabel>
+                        <FormLabel>Red educativa</FormLabel>
                         <Select
-                          disabled={selectedCreateRole === "superadmin"}
-                          onValueChange={(value) => field.onChange(Number(value))}
+                          disabled={selectedCreateScopeType === "global"}
+                          onValueChange={(value) => {
+                            field.onChange(Number(value));
+                            createForm.setValue("schoolId", undefined);
+                          }}
                           value={field.value ? String(field.value) : undefined}
                         >
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder={selectedCreateRole === "superadmin" ? "No requiere colegio" : "Selecciona un colegio"} />
+                              <SelectValue placeholder={selectedCreateScopeType === "global" ? "No requiere red" : "Selecciona una red"} />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {tenantsData?.data.map((tenant) => (
+                            {createTenantOptions.map((tenant) => (
                               <SelectItem key={tenant.id} value={String(tenant.id)}>{tenant.name}</SelectItem>
                             ))}
                           </SelectContent>
@@ -379,9 +514,32 @@ export default function Users() {
                     )} />
                   ) : (
                     <div className="rounded-lg border bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                      El usuario se creara dentro de tu colegio actual.
+                      El usuario se creara dentro de tu red educativa actual.
                     </div>
                   )}
+
+                  <FormField control={createForm.control} name="schoolId" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Colegio</FormLabel>
+                      <Select
+                        disabled={selectedCreateScopeType !== "school"}
+                        onValueChange={(value) => field.onChange(Number(value))}
+                        value={field.value ? String(field.value) : undefined}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder={selectedCreateScopeType !== "school" ? "No requiere colegio concreto" : "Selecciona un colegio"} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {createSchoolOptions.map((school) => (
+                            <SelectItem key={school.id} value={String(school.id)}>{school.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
                 </div>
 
                 <FormField control={createForm.control} name="password" render={({ field }) => (
@@ -428,7 +586,20 @@ export default function Users() {
                 <FormField control={editForm.control} name="role" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Rol</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        const nextScope = getDefaultScopeForRole(value);
+                        editForm.setValue("scopeType", nextScope);
+                        if (nextScope === "global") {
+                          editForm.setValue("tenantId", undefined);
+                          editForm.setValue("schoolId", undefined);
+                        } else if (nextScope === "tenant") {
+                          editForm.setValue("schoolId", undefined);
+                        }
+                      }}
+                      value={field.value}
+                    >
                       <FormControl><SelectTrigger><SelectValue placeholder="Selecciona un rol" /></SelectTrigger></FormControl>
                       <SelectContent>
                         {availableRoles.map((role) => (
@@ -440,18 +611,52 @@ export default function Users() {
                   </FormItem>
                 )} />
 
-                {currentUser?.role === "superadmin" ? (
+                <FormField control={editForm.control} name="scopeType" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Ambito de acceso</FormLabel>
+                    <Select
+                      onValueChange={(value) => {
+                        field.onChange(value as "global" | "tenant" | "school");
+                        if (value === "global") {
+                          editForm.setValue("tenantId", undefined);
+                          editForm.setValue("schoolId", undefined);
+                        }
+                        if (value === "tenant") {
+                          editForm.setValue("schoolId", undefined);
+                        }
+                      }}
+                      value={field.value}
+                    >
+                      <FormControl><SelectTrigger><SelectValue placeholder="Selecciona el alcance" /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        {(currentUser?.role === "superadmin" || currentUser?.role === "tecnico") && (
+                          <SelectItem value="global">Todo el sistema</SelectItem>
+                        )}
+                        <SelectItem value="tenant">Toda la red educativa</SelectItem>
+                        <SelectItem value="school">Solo un colegio</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                {(currentUser?.role === "superadmin" || currentUser?.role === "tecnico") ? (
                   <FormField control={editForm.control} name="tenantId" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Colegio</FormLabel>
+                      <FormLabel>Red educativa</FormLabel>
                       <Select
-                        disabled={selectedEditRole === "superadmin"}
-                        onValueChange={(value) => field.onChange(Number(value))}
+                        disabled={selectedEditScopeType === "global"}
+                        onValueChange={(value) => {
+                          field.onChange(Number(value));
+                          editForm.setValue("schoolId", undefined);
+                        }}
                         value={field.value ? String(field.value) : undefined}
                       >
-                        <FormControl><SelectTrigger><SelectValue placeholder={selectedEditRole === "superadmin" ? "No requiere colegio" : "Selecciona un colegio"} /></SelectTrigger></FormControl>
+                        <FormControl><SelectTrigger><SelectValue placeholder={selectedEditScopeType === "global" ? "No requiere red" : "Selecciona una red"} /></SelectTrigger></FormControl>
                         <SelectContent>
-                          {tenantsData?.data.map((tenant) => (
+                          {editTenantOptions.map((tenant) => (
                             <SelectItem key={tenant.id} value={String(tenant.id)}>{tenant.name}</SelectItem>
                           ))}
                         </SelectContent>
@@ -461,9 +666,28 @@ export default function Users() {
                   )} />
                 ) : (
                   <div className="rounded-lg border bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                    Este usuario pertenece a tu colegio actual.
+                    Este usuario pertenece a tu red educativa actual.
                   </div>
                 )}
+
+                <FormField control={editForm.control} name="schoolId" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Colegio</FormLabel>
+                    <Select
+                      disabled={selectedEditScopeType !== "school"}
+                      onValueChange={(value) => field.onChange(Number(value))}
+                      value={field.value ? String(field.value) : undefined}
+                    >
+                      <FormControl><SelectTrigger><SelectValue placeholder={selectedEditScopeType !== "school" ? "No requiere colegio concreto" : "Selecciona un colegio"} /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        {editSchoolOptions.map((school) => (
+                          <SelectItem key={school.id} value={String(school.id)}>{school.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
               </div>
 
               <FormField control={editForm.control} name="active" render={({ field }) => (
@@ -547,7 +771,14 @@ export default function Users() {
             ) : (
               sortedUsers.map((user) => (
                 <TableRow key={user.id} className="group">
-                  <TableCell className="text-sm text-slate-600 dark:text-slate-400">{user.tenantName || currentUser?.tenantName || <span className="italic text-slate-400">Sistema</span>}</TableCell>
+                  <TableCell className="text-sm text-slate-600 dark:text-slate-400">
+                    <div className="space-y-1">
+                      <div>{user.schoolName || user.tenantName || currentUser?.schoolName || currentUser?.tenantName || <span className="italic text-slate-400">Sistema</span>}</div>
+                      {user.schoolName && user.tenantName && user.schoolName !== user.tenantName && (
+                        <div className="text-xs text-slate-400">Red: {user.tenantName}</div>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-sm font-medium text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">{user.name.charAt(0)}</div>

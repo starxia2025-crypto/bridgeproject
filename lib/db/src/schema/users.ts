@@ -2,10 +2,13 @@ import { int, nvarchar, datetime2 } from "drizzle-orm/mssql-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { tenantsTable } from "./tenants";
+import { schoolsTable } from "./schools";
 import { boolColumn, createdAtColumn, dboSchema, idColumn, updatedAtColumn } from "./_shared";
 
 export const userRoleEnum = ["superadmin", "admin_cliente", "manager", "tecnico", "usuario_cliente", "visor_cliente"] as const;
 export type UserRole = typeof userRoleEnum[number];
+export const userScopeTypeEnum = ["global", "tenant", "school"] as const;
+export type UserScopeType = typeof userScopeTypeEnum[number];
 
 export const usersTable = dboSchema.table("SOP_users", {
   id: idColumn(),
@@ -14,6 +17,8 @@ export const usersTable = dboSchema.table("SOP_users", {
   passwordHash: nvarchar("password_hash", { length: "max" }).notNull(),
   role: nvarchar("role", { length: 50 }).notNull().default("usuario_cliente"),
   tenantId: int("tenant_id").references(() => tenantsTable.id),
+  schoolId: int("school_id").references(() => schoolsTable.id),
+  scopeType: nvarchar("scope_type", { length: 20 }).notNull().default("school"),
   active: boolColumn("active", true),
   lastLoginAt: datetime2("last_login_at", { mode: "date" }),
   createdAt: createdAtColumn(),

@@ -7,7 +7,7 @@ import { requireAuth, requireRole } from "../lib/auth.js";
 import { createAuditLog } from "../lib/audit.js";
 import { parseDbJson, stringifyDbJson } from "../lib/db-json.js";
 import { containsInsensitive } from "../lib/db-search.js";
-import { findMochilasStudentByEmail } from "../lib/mochilas.js";
+import { findMochilasStudentByEmail, findMochilasStudentByOrderId } from "../lib/mochilas.js";
 
 const router = Router();
 
@@ -44,6 +44,11 @@ const changeStatusSchema = z.object({
 
 const mochilaStudentLookupSchema = z.object({
   email: z.string().email(),
+  tenantId: z.coerce.number().optional(),
+});
+
+const mochilaOrderLookupSchema = z.object({
+  orderId: z.string().trim().min(1),
   tenantId: z.coerce.number().optional(),
 });
 
@@ -365,6 +370,7 @@ router.get("/mochilas/student", requireAuth, async (req, res) => {
       id: tenantsTable.id,
       name: tenantsTable.name,
       hasMochilasAccess: tenantsTable.hasMochilasAccess,
+      hasOrderLookup: tenantsTable.hasOrderLookup,
     })
     .top(1)
     .from(tenantsTable)
@@ -392,6 +398,59 @@ router.get("/mochilas/student", requireAuth, async (req, res) => {
   } catch (error) {
     console.error("Mochilas lookup failed", error);
     res.status(500).json({ error: "InternalServerError", message: "No se pudo consultar la informacion de Mochilas." });
+  }
+});
+
+router.get("/mochilas/order", requireAuth, async (req, res) => {
+  const authUser = (req as any).user;
+  const parsed = mochilaOrderLookupSchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "ValidationError", message: "Indica un pedido valido." });
+    return;
+  }
+
+  const tenantId =
+    authUser.scopeType === "global"
+      ? parsed.data.tenantId
+      : authUser.tenantId;
+
+  if (!tenantId) {
+    res.status(400).json({ error: "ValidationError", message: "Selecciona primero la red educativa." });
+    return;
+  }
+
+  const tenants = await db
+    .select({
+      id: tenantsTable.id,
+      name: tenantsTable.name,
+      hasOrderLookup: tenantsTable.hasOrderLookup,
+    })
+    .top(1)
+    .from(tenantsTable)
+    .where(eq(tenantsTable.id, tenantId));
+
+  const tenant = tenants[0];
+  if (!tenant) {
+    res.status(404).json({ error: "NotFound", message: "No se encontro la red educativa seleccionada." });
+    return;
+  }
+
+  if (!tenant.hasOrderLookup) {
+    res.status(400).json({ error: "OrderLookupDisabled", message: "La busqueda por pedido no esta activada para este colegio o red educativa." });
+    return;
+  }
+
+  try {
+    const student = await findMochilasStudentByOrderId(parsed.data.orderId);
+    if (!student) {
+      res.status(404).json({ error: "NotFound", message: "Pedido no encontrado. No es mochila, o no ha sido procesado aun." });
+      return;
+    }
+
+    res.json(student);
+  } catch (error) {
+    console.error("Mochilas order lookup failed", error);
+    res.status(500).json({ error: "InternalServerError", message: "No se pudo consultar la informacion del pedido en Mochilas." });
   }
 });
 

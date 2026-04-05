@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
-import { usersTable, tenantsTable } from "@workspace/db/schema";
+import { schoolsTable, tenantsTable, usersTable } from "@workspace/db/schema";
 import { eq, and, count } from "drizzle-orm";
 import { requireAuth, requireRole, hashPassword } from "../lib/auth.js";
 import { createAuditLog } from "../lib/audit.js";
@@ -10,12 +10,15 @@ import { containsInsensitive } from "../lib/db-search.js";
 const router = Router();
 
 const userRoles = ["superadmin", "admin_cliente", "manager", "tecnico", "usuario_cliente", "visor_cliente"] as const;
+const userScopeTypes = ["global", "tenant", "school"] as const;
 
 const createUserSchema = z.object({
   email: z.string().email(),
   name: z.string().min(2),
   role: z.enum(userRoles),
   tenantId: z.number().nullable().optional(),
+  schoolId: z.number().nullable().optional(),
+  scopeType: z.enum(userScopeTypes).optional(),
   password: z.string().min(8),
 });
 
@@ -24,11 +27,78 @@ const updateUserSchema = z.object({
   role: z.enum(userRoles).optional(),
   active: z.boolean().optional(),
   tenantId: z.number().nullable().optional(),
+  schoolId: z.number().nullable().optional(),
+  scopeType: z.enum(userScopeTypes).optional(),
 });
 
 function isSqlServerDuplicateError(error: any) {
   const sqlServerNumber = error?.number ?? error?.originalError?.info?.number ?? error?.precedingErrors?.[0]?.number;
   return error?.code === "23505" || error?.code === "2627" || error?.code === "2601" || sqlServerNumber === 2627 || sqlServerNumber === 2601;
+}
+
+function getDefaultScopeTypeForRole(role: (typeof userRoles)[number]) {
+  switch (role) {
+    case "superadmin":
+    case "tecnico":
+      return "global" as const;
+    case "admin_cliente":
+    case "visor_cliente":
+      return "tenant" as const;
+    case "manager":
+    case "usuario_cliente":
+    default:
+      return "school" as const;
+  }
+}
+
+async function getSchoolById(schoolId: number) {
+  const schools = await db
+    .select({
+      id: schoolsTable.id,
+      tenantId: schoolsTable.tenantId,
+      name: schoolsTable.name,
+      active: schoolsTable.active,
+    })
+    .top(1)
+    .from(schoolsTable)
+    .where(eq(schoolsTable.id, schoolId));
+
+  return schools[0] ?? null;
+}
+
+async function resolveUserScopeInput(input: {
+  role: (typeof userRoles)[number];
+  tenantId?: number | null;
+  schoolId?: number | null;
+  scopeType?: (typeof userScopeTypes)[number];
+}) {
+  const scopeType = input.scopeType ?? getDefaultScopeTypeForRole(input.role);
+  let tenantId = input.tenantId ?? null;
+  let schoolId = input.schoolId ?? null;
+
+  if (scopeType === "global") {
+    return { scopeType, tenantId: null, schoolId: null, schoolName: null };
+  }
+
+  if (scopeType === "school") {
+    if (!schoolId) {
+      throw new Error("Selecciona el colegio del usuario.");
+    }
+
+    const school = await getSchoolById(schoolId);
+    if (!school || !school.active) {
+      throw new Error("El colegio seleccionado no esta disponible.");
+    }
+
+    tenantId = school.tenantId;
+    return { scopeType, tenantId, schoolId: school.id, schoolName: school.name };
+  }
+
+  if (!tenantId) {
+    throw new Error("Selecciona la red educativa del usuario.");
+  }
+
+  return { scopeType, tenantId, schoolId: null, schoolName: null };
 }
 
 router.get("/", requireAuth, async (req, res) => {
@@ -63,13 +133,17 @@ router.get("/", requireAuth, async (req, res) => {
             name: usersTable.name,
             role: usersTable.role,
             tenantId: usersTable.tenantId,
+            schoolId: usersTable.schoolId,
+            scopeType: usersTable.scopeType,
             active: usersTable.active,
             createdAt: usersTable.createdAt,
             lastLoginAt: usersTable.lastLoginAt,
             tenantName: tenantsTable.name,
+            schoolName: schoolsTable.name,
           })
             .from(usersTable)
             .leftJoin(tenantsTable, eq(usersTable.tenantId, tenantsTable.id))
+            .leftJoin(schoolsTable, eq(usersTable.schoolId, schoolsTable.id))
             .where(where)
             .orderBy(usersTable.createdAt)
             .offset(offset)
@@ -80,14 +154,18 @@ router.get("/", requireAuth, async (req, res) => {
             name: usersTable.name,
             role: usersTable.role,
             tenantId: usersTable.tenantId,
+            schoolId: usersTable.schoolId,
+            scopeType: usersTable.scopeType,
             active: usersTable.active,
             createdAt: usersTable.createdAt,
             lastLoginAt: usersTable.lastLoginAt,
             tenantName: tenantsTable.name,
+            schoolName: schoolsTable.name,
           })
             .top(limit)
             .from(usersTable)
             .leftJoin(tenantsTable, eq(usersTable.tenantId, tenantsTable.id))
+            .leftJoin(schoolsTable, eq(usersTable.schoolId, schoolsTable.id))
             .where(where)
             .orderBy(usersTable.createdAt)
     ),
@@ -98,7 +176,7 @@ router.get("/", requireAuth, async (req, res) => {
   res.json({ data: users, total, page, limit, totalPages: Math.ceil(total / limit) });
 });
 
-router.post("/", requireAuth, requireRole("superadmin", "admin_cliente", "tecnico", "visor_cliente"), async (req, res) => {
+router.post("/", requireAuth, requireRole("superadmin", "admin_cliente", "tecnico"), async (req, res) => {
   const authUser = (req as any).user;
   const parsed = createUserSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -106,25 +184,34 @@ router.post("/", requireAuth, requireRole("superadmin", "admin_cliente", "tecnic
     return;
   }
 
-  // admin_cliente can only create users in their own tenant
-  if (authUser.role === "admin_cliente" || authUser.role === "visor_cliente") {
-    if (parsed.data.tenantId !== authUser.tenantId) {
-      res.status(403).json({ error: "Forbidden", message: "Cannot create users in another tenant" });
-      return;
-    }
-    if (!["manager", "usuario_cliente", "visor_cliente"].includes(parsed.data.role)) {
-      res.status(403).json({ error: "Forbidden", message: "Cannot create this role" });
-      return;
-    }
-  }
-
   try {
+    const requestedScope = await resolveUserScopeInput({
+      role: parsed.data.role,
+      tenantId: parsed.data.tenantId,
+      schoolId: parsed.data.schoolId,
+      scopeType: parsed.data.scopeType,
+    });
+
+    if (authUser.role === "admin_cliente") {
+      if (requestedScope.scopeType === "global" || requestedScope.tenantId !== authUser.tenantId) {
+        res.status(403).json({ error: "Forbidden", message: "Cannot create users outside your educational network" });
+        return;
+      }
+
+      if (!["manager", "usuario_cliente", "visor_cliente"].includes(parsed.data.role)) {
+        res.status(403).json({ error: "Forbidden", message: "Cannot create this role" });
+        return;
+      }
+    }
+
     const passwordHash = await hashPassword(parsed.data.password);
     await db.insert(usersTable).values({
       email: parsed.data.email.toLowerCase(),
       name: parsed.data.name,
       role: parsed.data.role,
-      tenantId: parsed.data.tenantId ?? null,
+      tenantId: requestedScope.tenantId,
+      schoolId: requestedScope.schoolId,
+      scopeType: requestedScope.scopeType,
       passwordHash,
     });
 
@@ -135,14 +222,18 @@ router.post("/", requireAuth, requireRole("superadmin", "admin_cliente", "tecnic
         name: usersTable.name,
         role: usersTable.role,
         tenantId: usersTable.tenantId,
+        schoolId: usersTable.schoolId,
+        scopeType: usersTable.scopeType,
         active: usersTable.active,
         createdAt: usersTable.createdAt,
         lastLoginAt: usersTable.lastLoginAt,
         tenantName: tenantsTable.name,
+        schoolName: schoolsTable.name,
       })
       .top(1)
       .from(usersTable)
       .leftJoin(tenantsTable, eq(usersTable.tenantId, tenantsTable.id))
+      .leftJoin(schoolsTable, eq(usersTable.schoolId, schoolsTable.id))
       .where(eq(usersTable.email, parsed.data.email.toLowerCase()));
 
     const createdUser = createdUsers[0];
@@ -155,12 +246,23 @@ router.post("/", requireAuth, requireRole("superadmin", "admin_cliente", "tecnic
       entityType: "user",
       entityId: createdUser.id,
       userId: authUser.userId,
-      tenantId: parsed.data.tenantId ?? null,
-      newValues: { email: parsed.data.email, name: parsed.data.name, role: parsed.data.role },
+      tenantId: requestedScope.tenantId,
+      newValues: {
+        email: parsed.data.email,
+        name: parsed.data.name,
+        role: parsed.data.role,
+        scopeType: requestedScope.scopeType,
+        schoolId: requestedScope.schoolId,
+      },
     });
 
     res.status(201).json(createdUser);
   } catch (error: any) {
+    if (error instanceof Error && (error.message.includes("Selecciona el colegio") || error.message.includes("Selecciona la red educativa") || error.message.includes("no esta disponible"))) {
+      res.status(400).json({ error: "ValidationError", message: error.message });
+      return;
+    }
+
     if (isSqlServerDuplicateError(error)) {
       res.status(409).json({ error: "Conflict", message: "Ya existe un usuario con ese correo." });
       return;
@@ -182,14 +284,18 @@ router.get("/:userId", requireAuth, async (req, res) => {
       name: usersTable.name,
       role: usersTable.role,
       tenantId: usersTable.tenantId,
+      schoolId: usersTable.schoolId,
+      scopeType: usersTable.scopeType,
       active: usersTable.active,
       createdAt: usersTable.createdAt,
       lastLoginAt: usersTable.lastLoginAt,
       tenantName: tenantsTable.name,
+      schoolName: schoolsTable.name,
     })
     .top(1)
     .from(usersTable)
     .leftJoin(tenantsTable, eq(usersTable.tenantId, tenantsTable.id))
+    .leftJoin(schoolsTable, eq(usersTable.schoolId, schoolsTable.id))
     .where(eq(usersTable.id, userId));
 
   const user = users[0];
@@ -209,7 +315,7 @@ router.get("/:userId", requireAuth, async (req, res) => {
   res.json(user);
 });
 
-router.patch("/:userId", requireAuth, requireRole("superadmin", "admin_cliente", "tecnico", "visor_cliente"), async (req, res) => {
+router.patch("/:userId", requireAuth, requireRole("superadmin", "admin_cliente", "tecnico"), async (req, res) => {
   const userId = Number(req.params["userId"]);
   const authUser = (req as any).user;
   const parsed = updateUserSchema.safeParse(req.body);
@@ -225,62 +331,90 @@ router.patch("/:userId", requireAuth, requireRole("superadmin", "admin_cliente",
     return;
   }
 
-  if ((authUser.role === "admin_cliente" || authUser.role === "visor_cliente") && user.tenantId !== authUser.tenantId) {
+  if (authUser.role === "admin_cliente" && user.tenantId !== authUser.tenantId) {
     res.status(403).json({ error: "Forbidden", message: "Access denied" });
     return;
   }
 
-  if (authUser.role === "admin_cliente" || authUser.role === "visor_cliente") {
-    if (parsed.data.tenantId !== undefined && parsed.data.tenantId !== authUser.tenantId) {
-      res.status(403).json({ error: "Forbidden", message: "Cannot move users to another tenant" });
+  try {
+    const nextRole = parsed.data.role ?? user.role;
+    const resolvedScope = await resolveUserScopeInput({
+      role: nextRole,
+      tenantId: parsed.data.tenantId ?? user.tenantId,
+      schoolId: parsed.data.schoolId ?? user.schoolId,
+      scopeType: parsed.data.scopeType ?? user.scopeType,
+    });
+
+    if (authUser.role === "admin_cliente") {
+      if (resolvedScope.scopeType === "global" || resolvedScope.tenantId !== authUser.tenantId) {
+        res.status(403).json({ error: "Forbidden", message: "Cannot move users outside your educational network" });
+        return;
+      }
+
+      if (parsed.data.role && !["manager", "usuario_cliente", "visor_cliente"].includes(parsed.data.role)) {
+        res.status(403).json({ error: "Forbidden", message: "Cannot assign this role" });
+        return;
+      }
+    }
+
+    await db
+      .update(usersTable)
+      .set({
+        ...parsed.data,
+        role: nextRole,
+        tenantId: resolvedScope.tenantId,
+        schoolId: resolvedScope.schoolId,
+        scopeType: resolvedScope.scopeType,
+        updatedAt: new Date(),
+      })
+      .where(eq(usersTable.id, userId));
+
+    const updatedUsers = await db
+      .select({
+        id: usersTable.id,
+        email: usersTable.email,
+        name: usersTable.name,
+        role: usersTable.role,
+        tenantId: usersTable.tenantId,
+        schoolId: usersTable.schoolId,
+        scopeType: usersTable.scopeType,
+        active: usersTable.active,
+        createdAt: usersTable.createdAt,
+        lastLoginAt: usersTable.lastLoginAt,
+        tenantName: tenantsTable.name,
+        schoolName: schoolsTable.name,
+      })
+      .top(1)
+      .from(usersTable)
+      .leftJoin(tenantsTable, eq(usersTable.tenantId, tenantsTable.id))
+      .leftJoin(schoolsTable, eq(usersTable.schoolId, schoolsTable.id))
+      .where(eq(usersTable.id, userId));
+
+    const updatedUser = updatedUsers[0];
+    if (!updatedUser) {
+      res.status(404).json({ error: "NotFound", message: "User not found after update" });
       return;
     }
 
-    if (parsed.data.role && !["manager", "usuario_cliente", "visor_cliente"].includes(parsed.data.role)) {
-      res.status(403).json({ error: "Forbidden", message: "Cannot assign this role" });
+    await createAuditLog({
+      action: "update",
+      entityType: "user",
+      entityId: userId,
+      userId: authUser.userId,
+      tenantId: resolvedScope.tenantId,
+      oldValues: { name: user.name, role: user.role, active: user.active, scopeType: user.scopeType, schoolId: user.schoolId },
+      newValues: { ...parsed.data, role: nextRole, scopeType: resolvedScope.scopeType, schoolId: resolvedScope.schoolId },
+    });
+
+    res.json(updatedUser);
+  } catch (error) {
+    if (error instanceof Error && (error.message.includes("Selecciona el colegio") || error.message.includes("Selecciona la red educativa") || error.message.includes("no esta disponible"))) {
+      res.status(400).json({ error: "ValidationError", message: error.message });
       return;
     }
+
+    throw error;
   }
-
-  await db
-    .update(usersTable)
-    .set({ ...parsed.data, updatedAt: new Date() })
-    .where(eq(usersTable.id, userId));
-
-  const updatedUsers = await db
-    .select({
-      id: usersTable.id,
-      email: usersTable.email,
-      name: usersTable.name,
-      role: usersTable.role,
-      tenantId: usersTable.tenantId,
-      active: usersTable.active,
-      createdAt: usersTable.createdAt,
-      lastLoginAt: usersTable.lastLoginAt,
-      tenantName: tenantsTable.name,
-    })
-    .top(1)
-    .from(usersTable)
-    .leftJoin(tenantsTable, eq(usersTable.tenantId, tenantsTable.id))
-    .where(eq(usersTable.id, userId));
-
-  const updatedUser = updatedUsers[0];
-  if (!updatedUser) {
-    res.status(404).json({ error: "NotFound", message: "User not found after update" });
-    return;
-  }
-
-  await createAuditLog({
-    action: "update",
-    entityType: "user",
-    entityId: userId,
-    userId: authUser.userId,
-    tenantId: user.tenantId,
-    oldValues: { name: user.name, role: user.role, active: user.active },
-    newValues: parsed.data,
-  });
-
-  res.json(updatedUser);
 });
 
 export default router;

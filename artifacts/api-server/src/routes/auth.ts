@@ -26,6 +26,9 @@ async function buildUserResponse(user: typeof usersTable.$inferSelect) {
   let tenantPrimaryColor: string | null = null;
   let tenantSidebarBackgroundColor: string | null = null;
   let tenantSidebarTextColor: string | null = null;
+  let tenantHasMochilasAccess = false;
+  let tenantHasOrderLookup = false;
+  let tenantHasReturnsAccess = false;
   let tenantQuickLinks: Array<{ label: string; url: string; icon: string }> = [];
   let schoolName: string | null = null;
 
@@ -47,6 +50,9 @@ async function buildUserResponse(user: typeof usersTable.$inferSelect) {
         primaryColor: tenantsTable.primaryColor,
         sidebarBackgroundColor: tenantsTable.sidebarBackgroundColor,
         sidebarTextColor: tenantsTable.sidebarTextColor,
+        hasMochilasAccess: tenantsTable.hasMochilasAccess,
+        hasOrderLookup: tenantsTable.hasOrderLookup,
+        hasReturnsAccess: tenantsTable.hasReturnsAccess,
         quickLinks: tenantsTable.quickLinks,
       })
       .top(1)
@@ -58,6 +64,9 @@ async function buildUserResponse(user: typeof usersTable.$inferSelect) {
     tenantPrimaryColor = tenants[0]?.primaryColor ?? null;
     tenantSidebarBackgroundColor = tenants[0]?.sidebarBackgroundColor ?? null;
     tenantSidebarTextColor = tenants[0]?.sidebarTextColor ?? null;
+    tenantHasMochilasAccess = tenants[0]?.hasMochilasAccess ?? false;
+    tenantHasOrderLookup = tenants[0]?.hasOrderLookup ?? false;
+    tenantHasReturnsAccess = tenants[0]?.hasReturnsAccess ?? false;
     tenantQuickLinks = parseDbJson<Array<{ label: string; url: string; icon: string }>>(tenants[0]?.quickLinks, []);
   }
 
@@ -75,6 +84,9 @@ async function buildUserResponse(user: typeof usersTable.$inferSelect) {
     tenantPrimaryColor,
     tenantSidebarBackgroundColor,
     tenantSidebarTextColor,
+    tenantHasMochilasAccess,
+    tenantHasOrderLookup,
+    tenantHasReturnsAccess,
     tenantQuickLinks,
     active: user.active,
     createdAt: user.createdAt,

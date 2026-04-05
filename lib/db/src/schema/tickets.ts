@@ -3,6 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { tenantsTable } from "./tenants";
 import { usersTable } from "./users";
+import { schoolsTable } from "./schools";
 import { createdAtColumn, dboSchema, idColumn, jsonTextColumn, updatedAtColumn } from "./_shared";
 
 export const ticketStatusEnum = ["nuevo", "pendiente", "en_revision", "en_proceso", "esperando_cliente", "resuelto", "cerrado"] as const;
@@ -20,6 +21,7 @@ export const ticketsTable = dboSchema.table("SOP_tickets", {
   priority: nvarchar("priority", { length: 20 }).notNull().default("media"),
   category: nvarchar("category", { length: 255 }),
   tenantId: int("tenant_id").notNull().references(() => tenantsTable.id),
+  schoolId: int("school_id").references(() => schoolsTable.id),
   createdById: int("created_by_id").notNull().references(() => usersTable.id),
   assignedToId: int("assigned_to_id").references(() => usersTable.id),
   customFields: jsonTextColumn<Record<string, unknown> | null>("custom_fields"),

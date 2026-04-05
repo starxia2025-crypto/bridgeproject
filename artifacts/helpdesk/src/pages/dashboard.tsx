@@ -1,12 +1,18 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { 
   useGetDashboardStats, 
   useGetTicketsByStatus, 
   useGetTicketsOverTime, 
   useGetRecentActivity,
-  useGetMe
+  useGetMe,
+  useAssignTicket,
+  useListTickets,
+  useListUsers,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   LineChart,
   Line,
@@ -23,17 +29,71 @@ import { Ticket, Clock, CheckCircle2, AlertCircle, Building2 } from "lucide-reac
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { StatusBadge } from "@/components/badges";
+import { toast } from "@/hooks/use-toast";
+
+const openStatuses = ["nuevo", "pendiente", "en_revision", "en_proceso", "esperando_cliente"];
 
 export default function Dashboard() {
   const { data: user } = useGetMe();
   const tenantId = user?.role === 'superadmin' ? undefined : user?.tenantId;
+  const [openTicketsDialog, setOpenTicketsDialog] = useState(false);
+  const [assignmentDrafts, setAssignmentDrafts] = useState<Record<number, string>>({});
   
   const { data: stats, isLoading: statsLoading } = useGetDashboardStats({ tenantId });
   const { data: statusData } = useGetTicketsByStatus({ tenantId });
   const { data: timeData } = useGetTicketsOverTime({ tenantId, period: "day" });
   const { data: activity } = useGetRecentActivity({ tenantId, limit: 5 });
+  const { data: openTicketsData, refetch: refetchOpenTickets } = useListTickets(
+    { tenantId, limit: 100 },
+    { query: { enabled: user?.role === "superadmin" && openTicketsDialog } },
+  );
+  const { data: techniciansData } = useListUsers(
+    { role: "tecnico", active: true, limit: 100 },
+    { query: { enabled: user?.role === "superadmin" && openTicketsDialog } },
+  );
+
+  const assignTicket = useAssignTicket({
+    mutation: {
+      onSuccess: async () => {
+        toast({
+          title: "Ticket asignado",
+          description: "La asignacion al tecnico se ha guardado correctamente.",
+        });
+        await refetchOpenTickets();
+      },
+      onError: (error) => {
+        toast({
+          title: "No se pudo asignar el ticket",
+          description: error instanceof Error ? error.message : "Intentalo de nuevo.",
+          variant: "destructive",
+        });
+      },
+    },
+  });
 
   const COLORS = ['#6366f1', '#14b8a6', '#f59e0b', '#f43f5e', '#ef4444', '#8b5cf6', '#64748b'];
+  const openTickets = useMemo(
+    () => (openTicketsData?.data ?? []).filter((ticket) => openStatuses.includes(ticket.status)),
+    [openTicketsData?.data],
+  );
+  const technicians = techniciansData?.data ?? [];
+
+  function handleAssignTicket(ticketId: number) {
+    const selectedUserId = assignmentDrafts[ticketId];
+    if (!selectedUserId) {
+      toast({
+        title: "Selecciona un tecnico",
+        description: "Elige primero el tecnico al que quieres asignar este ticket.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    assignTicket.mutate({
+      ticketId,
+      data: { userId: Number(selectedUserId) },
+    });
+  }
 
   if (statsLoading) {
     return (
@@ -61,7 +121,10 @@ export default function Dashboard() {
 
       {/* Tarjetas KPI */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card
+          className={user?.role === "superadmin" ? "cursor-pointer transition hover:border-primary/40 hover:shadow-md" : undefined}
+          onClick={user?.role === "superadmin" ? () => setOpenTicketsDialog(true) : undefined}
+        >
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-slate-500">Tickets Abiertos</CardTitle>
             <Ticket className="h-4 w-4 text-primary" />
@@ -238,6 +301,73 @@ export default function Dashboard() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={openTicketsDialog} onOpenChange={setOpenTicketsDialog}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Tickets abiertos</DialogTitle>
+            <DialogDescription>
+              Revisa quien tiene cada ticket y asignalo rapidamente a un tecnico.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {openTickets.length === 0 ? (
+              <div className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-slate-500">
+                No hay tickets abiertos ahora mismo.
+              </div>
+            ) : (
+              openTickets.map((ticket) => (
+                <div key={ticket.id} className="grid gap-3 rounded-xl border p-4 lg:grid-cols-[1.4fr_0.9fr_0.9fr_auto] lg:items-center">
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-slate-900">{ticket.title}</p>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                      <span>#{ticket.ticketNumber}</span>
+                      <span>·</span>
+                      <span>{ticket.schoolName || ticket.tenantName}</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-slate-400">Estado</p>
+                    <div className="mt-1"><StatusBadge status={ticket.status} /></div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-xs uppercase tracking-wide text-slate-400">Asignado a</p>
+                    <Select
+                      value={assignmentDrafts[ticket.id] ?? (ticket.assignedToId ? String(ticket.assignedToId) : "unassigned")}
+                      onValueChange={(value) => setAssignmentDrafts((current) => ({ ...current, [ticket.id]: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sin asignar" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unassigned">Sin asignar</SelectItem>
+                        {technicians.map((tech) => (
+                          <SelectItem key={tech.id} value={String(tech.id)}>
+                            {tech.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      onClick={() => handleAssignTicket(ticket.id)}
+                      disabled={assignTicket.isPending || (assignmentDrafts[ticket.id] ?? (ticket.assignedToId ? String(ticket.assignedToId) : "unassigned")) === "unassigned"}
+                    >
+                      Asignar
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

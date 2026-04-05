@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { TicketStatus, useAssignTicket, useChangeTicketStatus, useGetMe, useListTickets } from "@workspace/api-client-react";
 import { format, formatDistanceToNow } from "date-fns";
@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { StatusBadge, PriorityBadge } from "@/components/badges";
 import {
   Table,
@@ -18,15 +19,144 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { Search, Plus, Filter, MessageSquare, Clock, CheckCircle2, Inbox, UserRoundCheck, Eye, ArrowRight } from "lucide-react";
+import { Search, Plus, Filter, MessageSquare, Clock, CheckCircle2, Inbox, UserRoundCheck, Eye, ArrowRight, Upload } from "lucide-react";
 
 const openStatuses = ["nuevo", "pendiente", "en_revision", "en_proceso", "esperando_cliente"];
+const bulkImportHeaders = [
+  "colegio",
+  "email_informador",
+  "tipo_sujeto",
+  "email_afectado",
+  "prioridad",
+  "tipo_consulta",
+  "descripcion",
+  "pedido",
+  "matricula",
+  "etapa",
+  "curso",
+  "asignatura",
+  "observaciones",
+] as const;
+const bulkSubjectOptions = ["alumno", "docente", "sobre_mi_cuenta"] as const;
+const bulkPriorityOptions = ["baja", "media", "alta", "urgente"] as const;
+const bulkInquiryOptions = [
+  "Alumno sin libros",
+  "No puede acceder",
+  "Problemas de activación",
+  "No funciona el libro",
+  "Otro",
+] as const;
 
 function getTicketSubtitle(ticket: any) {
   const school = String(ticket.schoolName || ticket.customFields?.school || ticket.category || ticket.tenantName || "Colegio");
   const inquiryType = String(ticket.customFields?.inquiryType || ticket.customFields?.subjectType || "Consulta general");
   const studentEmail = ticket.customFields?.studentEmail ? String(ticket.customFields.studentEmail) : null;
   return { school, inquiryType, studentEmail };
+}
+
+function buildBulkImportTemplateRow(user: { email?: string | null; schoolName?: string | null; tenantName?: string | null } | undefined) {
+  const school = user?.schoolName || user?.tenantName || "Colegio";
+  const reporterEmail = user?.email || "informador@colegio.es";
+
+  return [
+    school,
+    reporterEmail,
+    "alumno",
+    "alumno@centro.es",
+    "media",
+    "No puede acceder",
+    "El alumno no puede entrar en la plataforma desde hoy.",
+    "10125633",
+    "2153",
+    "Primaria",
+    "5º",
+    "Inglés",
+    "Intentado en dos navegadores",
+  ] as const;
+}
+
+async function downloadBulkTemplate(user: { email?: string | null; schoolName?: string | null; tenantName?: string | null } | undefined) {
+  const excelModule = await import("exceljs");
+  const ExcelJS = excelModule.default ?? excelModule;
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Consultas");
+  const exampleRow = buildBulkImportTemplateRow(user);
+  const schoolForFile = (user?.schoolName || user?.tenantName || "colegio").toLowerCase().replace(/\s+/g, "-");
+
+  worksheet.addRow([...bulkImportHeaders]);
+  worksheet.addRow([...exampleRow]);
+
+  worksheet.views = [{ state: "frozen", ySplit: 1 }];
+
+  const headerRow = worksheet.getRow(1);
+  headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4F46E5" } };
+  headerRow.alignment = { vertical: "middle", horizontal: "center" };
+
+  const widths = [22, 30, 18, 28, 14, 26, 42, 14, 14, 16, 12, 16, 28];
+  widths.forEach((width, index) => {
+    worksheet.getColumn(index + 1).width = width;
+  });
+
+  const dataRow = worksheet.getRow(2);
+  dataRow.eachCell((cell) => {
+    cell.border = {
+      top: { style: "thin", color: { argb: "FFE2E8F0" } },
+      left: { style: "thin", color: { argb: "FFE2E8F0" } },
+      bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
+      right: { style: "thin", color: { argb: "FFE2E8F0" } },
+    };
+  });
+
+  for (let row = 2; row <= 200; row += 1) {
+    worksheet.getCell(`C${row}`).dataValidation = {
+      type: "list",
+      allowBlank: false,
+      formulae: [`"${bulkSubjectOptions.join(",")}"`],
+      showErrorMessage: true,
+      errorTitle: "Valor no válido",
+      error: "Selecciona uno de los valores permitidos para tipo_sujeto.",
+    };
+    worksheet.getCell(`E${row}`).dataValidation = {
+      type: "list",
+      allowBlank: false,
+      formulae: [`"${bulkPriorityOptions.join(",")}"`],
+      showErrorMessage: true,
+      errorTitle: "Valor no válido",
+      error: "Selecciona una prioridad permitida.",
+    };
+    worksheet.getCell(`F${row}`).dataValidation = {
+      type: "list",
+      allowBlank: false,
+      formulae: [`"${bulkInquiryOptions.join(",")}"`],
+      showErrorMessage: true,
+      errorTitle: "Valor no válido",
+      error: "Selecciona uno de los tipos de consulta permitidos.",
+    };
+  }
+
+  const helpSheet = workbook.addWorksheet("Ayuda");
+  helpSheet.addRows([
+    ["Campo", "Qué debe contener"],
+    ["tipo_sujeto", "alumno, docente o sobre_mi_cuenta"],
+    ["prioridad", "baja, media, alta o urgente"],
+    ["tipo_consulta", bulkInquiryOptions.join(" | ")],
+    ["pedido", "Opcional. Solo si la incidencia viene de Mochilas o pedidos."],
+  ]);
+  helpSheet.getRow(1).font = { bold: true };
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `plantilla-consultas-${schoolForFile}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
 function SupportTicketCard({
@@ -62,7 +192,7 @@ function SupportTicketCard({
 
             <div>
               <h3 className="line-clamp-2 text-lg font-semibold text-slate-900">{ticket.title}</h3>
-              <p className="mt-1 text-sm text-slate-500">{school} · {inquiryType}</p>
+              <p className="mt-1 text-sm text-slate-500">{school} Â· {inquiryType}</p>
             </div>
 
             <div className="grid gap-3 text-sm text-slate-500 sm:grid-cols-3">
@@ -119,6 +249,7 @@ export default function Tickets() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
+  const [activeSupportTab, setActiveSupportTab] = useState("queue");
 
   const isSupportTech = user?.role === "tecnico";
   const showSchoolColumn = user?.scopeType === "tenant" || user?.scopeType === "global" || user?.role === "superadmin" || user?.role === "tecnico";
@@ -135,6 +266,7 @@ export default function Tickets() {
   const assignTicket = useAssignTicket({
     mutation: {
       onSuccess: async () => {
+        setActiveSupportTab("mine");
         toast({ title: "Ticket tomado", description: "El ticket ya figura en tu bandeja de trabajo." });
         await refetch();
       },
@@ -234,7 +366,10 @@ export default function Tickets() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-4">
-          <Card className="border-0 bg-gradient-to-br from-slate-900 to-slate-800 text-white shadow-sm">
+          <Card
+            className="cursor-pointer border-0 bg-gradient-to-br from-slate-900 to-slate-800 text-white shadow-sm transition hover:scale-[1.01]"
+            onClick={() => setActiveSupportTab("queue")}
+          >
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -245,7 +380,10 @@ export default function Tickets() {
               </div>
             </CardContent>
           </Card>
-          <Card className="border-0 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-sm">
+          <Card
+            className="cursor-pointer border-0 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-sm transition hover:scale-[1.01]"
+            onClick={() => setActiveSupportTab("mine")}
+          >
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -256,7 +394,10 @@ export default function Tickets() {
               </div>
             </CardContent>
           </Card>
-          <Card className="border-0 bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-sm">
+          <Card
+            className="cursor-pointer border-0 bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-sm transition hover:scale-[1.01]"
+            onClick={() => setActiveSupportTab("occupied")}
+          >
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -267,7 +408,10 @@ export default function Tickets() {
               </div>
             </CardContent>
           </Card>
-          <Card className="border-0 bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-sm">
+          <Card
+            className="cursor-pointer border-0 bg-gradient-to-br from-indigo-500 to-indigo-600 text-white shadow-sm transition hover:scale-[1.01]"
+            onClick={() => setActiveSupportTab("resolved")}
+          >
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -280,7 +424,7 @@ export default function Tickets() {
           </Card>
         </div>
 
-        <Tabs defaultValue="queue" className="space-y-4">
+        <Tabs value={activeSupportTab} onValueChange={setActiveSupportTab} className="space-y-4">
           <TabsList className="h-auto flex-wrap justify-start gap-2 bg-transparent p-0">
             <TabsTrigger value="queue">Pendientes sin asignar</TabsTrigger>
             <TabsTrigger value="mine">Mis tickets</TabsTrigger>
@@ -339,11 +483,86 @@ export default function Tickets() {
           <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Tickets de consulta</h1>
           <p className="mt-1 text-slate-500">Consulta el estado y la actividad de tus incidencias.</p>
         </div>
-        {user?.role !== "visor_cliente" && (
-          <Button onClick={() => setLocation("/tickets/new")} className="gap-2 shrink-0">
-            <Plus className="h-4 w-4" />
-            Nueva consulta
-          </Button>
+        {user?.role !== undefined && (
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Upload className="h-4 w-4" />
+                  Importación masiva
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-xl">
+                <DialogHeader>
+                  <DialogTitle>Importación masiva de consultas</DialogTitle>
+                  <DialogDescription>
+                    Descarga una plantilla Excel ya preparada con una fila de ejemplo y listas desplegables en las columnas que solo admiten ciertos valores.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 text-sm text-slate-600">
+                  <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+                    <p className="font-medium text-slate-900">Qué contiene la plantilla</p>
+                    <ul className="mt-2 space-y-1 text-slate-600">
+                      <li>Una fila de ejemplo ya rellena.</li>
+                      <li>Los nombres de columna que debe respetar el archivo.</li>
+                      <li>Desplegables en `tipo_sujeto`, `prioridad` y `tipo_consulta`.</li>
+                    </ul>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 p-4">
+                    <p className="font-medium text-slate-900">Qué significan los campos más importantes</p>
+                    <ul className="mt-2 space-y-2 text-slate-600">
+                      <li><span className="font-medium text-slate-900">tipo_sujeto</span>: quién sufre la incidencia. Usa <span className="font-medium">alumno</span>, <span className="font-medium">docente</span> o <span className="font-medium">sobre_mi_cuenta</span>.</li>
+                      <li><span className="font-medium text-slate-900">tipo_consulta</span>: motivo principal. Ejemplos: <span className="font-medium">No puede acceder</span>, <span className="font-medium">Alumno sin libros</span>, <span className="font-medium">Problemas de activación</span>, <span className="font-medium">No funciona el libro</span>.</li>
+                      <li><span className="font-medium text-slate-900">prioridad</span>: <span className="font-medium">baja</span>, <span className="font-medium">media</span>, <span className="font-medium">alta</span> o <span className="font-medium">urgente</span>.</li>
+                    </ul>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 p-4">
+                    <p className="font-medium text-slate-900">Antes de cargarlo</p>
+                    <p className="mt-2 text-slate-600">
+                      Usa una fila por consulta y no cambies los nombres de las columnas. La plantilla ya sale en `.xlsx` para que sea más fácil rellenarla.
+                    </p>
+                  </div>
+                </div>
+
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      void downloadBulkTemplate(user).catch(() => {
+                        toast({
+                          title: "No se pudo generar la plantilla",
+                          description: "Falta preparar la dependencia de Excel. Ejecuta pnpm install y vuelve a intentarlo.",
+                          variant: "destructive",
+                        });
+                      });
+                    }}
+                  >
+                    Descargar plantilla Excel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() =>
+                      toast({
+                        title: "Carga masiva preparada",
+                        description: "La plantilla ya está lista. En el siguiente paso conectaremos la subida real del fichero.",
+                      })
+                    }
+                  >
+                    Entendido
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <Button onClick={() => setLocation("/tickets/new")} className="gap-2">
+              <Plus className="h-4 w-4" />
+              Nueva consulta
+            </Button>
+          </div>
         )}
       </div>
 
@@ -425,7 +644,7 @@ export default function Tickets() {
                       <div className="font-medium text-slate-900 dark:text-slate-100 mb-1 line-clamp-1">{ticket.title}</div>
                       <div className="text-xs text-slate-500 flex items-center gap-2">
                         <span className="truncate max-w-[200px]">{school}</span>
-                        <span>·</span>
+                        <span>Â·</span>
                         <span>{inquiryType}</span>
                       </div>
                       {studentEmail ? <div className="mt-1 text-xs text-slate-500">Alumno afectado: {studentEmail}</div> : null}
@@ -459,3 +678,4 @@ export default function Tickets() {
     </div>
   );
 }
+
