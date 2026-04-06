@@ -6,6 +6,7 @@ export type MochilaRow = {
   studentName: string | null;
   studentSurname: string | null;
   studentEmail: string | null;
+  type: string | null;
   studentUser: string | null;
   studentPassword: string | null;
   token: string | null;
@@ -54,6 +55,7 @@ export async function findMochilasStudentByEmail(email: string): Promise<Mochila
       student_name: string | null;
       student_surname: string | null;
       student_email: string | null;
+      type: string | null;
       student_user: string | null;
       student_password: string | null;
       token: string | null;
@@ -68,6 +70,7 @@ export async function findMochilasStudentByEmail(email: string): Promise<Mochila
         student_name,
         student_surname,
         student_email,
+        type,
         student_user,
         student_password,
         token,
@@ -90,6 +93,7 @@ export async function findMochilasStudentByEmail(email: string): Promise<Mochila
     studentName: row.student_name,
     studentSurname: row.student_surname,
     studentEmail: row.student_email,
+    type: row.type,
     studentUser: row.student_user,
     studentPassword: row.student_password,
     token: row.token,
@@ -124,6 +128,7 @@ export async function findMochilasStudentByOrderId(orderId: string): Promise<Moc
       student_name: string | null;
       student_surname: string | null;
       student_email: string | null;
+      type: string | null;
       student_user: string | null;
       student_password: string | null;
       token: string | null;
@@ -138,6 +143,7 @@ export async function findMochilasStudentByOrderId(orderId: string): Promise<Moc
         student_name,
         student_surname,
         student_email,
+        type,
         student_user,
         student_password,
         token,
@@ -160,6 +166,7 @@ export async function findMochilasStudentByOrderId(orderId: string): Promise<Moc
     studentName: row.student_name,
     studentSurname: row.student_surname,
     studentEmail: row.student_email,
+    type: row.type,
     studentUser: row.student_user,
     studentPassword: row.student_password,
     token: row.token,

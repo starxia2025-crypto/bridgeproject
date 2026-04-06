@@ -52,6 +52,82 @@ const mochilaOrderLookupSchema = z.object({
   tenantId: z.coerce.number().optional(),
 });
 
+function normalizeSchoolName(value: string | null | undefined) {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function doesMochilaSchoolBelongToTenant(mochilaSchoolName: string | null | undefined, tenantSchoolNames: string[]) {
+  const normalizedMochila = normalizeSchoolName(mochilaSchoolName);
+  if (!normalizedMochila) return false;
+
+  return tenantSchoolNames.some((schoolName) => {
+    const normalizedTenantSchool = normalizeSchoolName(schoolName);
+    return (
+      normalizedTenantSchool === normalizedMochila ||
+      normalizedTenantSchool.includes(normalizedMochila) ||
+      normalizedMochila.includes(normalizedTenantSchool)
+    );
+  });
+}
+
+async function filterMochilasResultByTenantSchools(
+  tenantId: number,
+  mochilaResult: Awaited<ReturnType<typeof findMochilasStudentByEmail>>
+) {
+  if (!mochilaResult) return null;
+
+  const tenantSchools = await db
+    .select({ name: schoolsTable.name })
+    .from(schoolsTable)
+    .where(and(eq(schoolsTable.tenantId, tenantId), eq(schoolsTable.active, true)));
+
+  const tenantSchoolNames = tenantSchools.map((school) => school.name);
+  if (!tenantSchoolNames.length) {
+    return null;
+  }
+
+  const allowedRecords = mochilaResult.records.filter((record) =>
+    doesMochilaSchoolBelongToTenant(record.schoolName, tenantSchoolNames)
+  );
+
+  if (!allowedRecords.length) {
+    return null;
+  }
+
+  return {
+    ...mochilaResult,
+    schools: [...new Set(allowedRecords.map((record) => record.schoolName).filter(Boolean) as string[])],
+    records: allowedRecords,
+  };
+}
+
+function filterMochilasResultByAllowedTypes(
+  mochilaResult: Awaited<ReturnType<typeof findMochilasStudentByEmail>>,
+  allowedTypes: string[]
+) {
+  if (!mochilaResult) return null;
+
+  const normalizedAllowedTypes = allowedTypes.map((type) => type.toLowerCase());
+  const allowedRecords = mochilaResult.records.filter((record) =>
+    normalizedAllowedTypes.includes((record.type ?? "").trim().toLowerCase())
+  );
+
+  if (!allowedRecords.length) {
+    return null;
+  }
+
+  return {
+    ...mochilaResult,
+    schools: [...new Set(allowedRecords.map((record) => record.schoolName).filter(Boolean) as string[])],
+    records: allowedRecords,
+  };
+}
+
 function generateTicketNumber(): string {
   const timestamp = Date.now().toString(36).toUpperCase();
   const random = Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -394,7 +470,31 @@ router.get("/mochilas/student", requireAuth, async (req, res) => {
       return;
     }
 
-    res.json(student);
+    const typedStudent = tenant.hasOrderLookup
+      ? filterMochilasResultByAllowedTypes(student, ["mochila", "mochila_blink"])
+      : student;
+
+    if (!typedStudent) {
+      res.status(404).json({
+        error: "NotFound",
+        message: "No se encontro ningun alumno con ese correo en Mochilas.",
+      });
+      return;
+    }
+
+    const canSearchAcrossNetworks = ["visor_cliente", "tecnico", "superadmin"].includes(authUser.role);
+    const filteredStudent = canSearchAcrossNetworks
+      ? typedStudent
+      : await filterMochilasResultByTenantSchools(tenantId, typedStudent);
+    if (!filteredStudent) {
+      res.status(404).json({
+        error: "OutsideTenant",
+        message: `El alumno no pertenece a ningun centro de la red educativa "${tenant.name}".`,
+      });
+      return;
+    }
+
+    res.json(filteredStudent);
   } catch (error) {
     console.error("Mochilas lookup failed", error);
     res.status(500).json({ error: "InternalServerError", message: "No se pudo consultar la informacion de Mochilas." });
@@ -447,7 +547,19 @@ router.get("/mochilas/order", requireAuth, async (req, res) => {
       return;
     }
 
-    res.json(student);
+    const canSearchAcrossNetworks = ["visor_cliente", "tecnico", "superadmin"].includes(authUser.role);
+    const filteredStudent = canSearchAcrossNetworks
+      ? student
+      : await filterMochilasResultByTenantSchools(tenantId, student);
+    if (!filteredStudent) {
+      res.status(404).json({
+        error: "OutsideTenant",
+        message: `El pedido no pertenece a ningun centro de la red educativa "${tenant.name}".`,
+      });
+      return;
+    }
+
+    res.json(filteredStudent);
   } catch (error) {
     console.error("Mochilas order lookup failed", error);
     res.status(500).json({ error: "InternalServerError", message: "No se pudo consultar la informacion del pedido en Mochilas." });

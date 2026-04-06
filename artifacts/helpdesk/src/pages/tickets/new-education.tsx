@@ -18,7 +18,27 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Loader2, RefreshCcw, TriangleAlert, Building2, Undo2, BookX } from "lucide-react";
+import {
+  ArrowLeft,
+  Loader2,
+  RefreshCcw,
+  TriangleAlert,
+  Building2,
+  Undo2,
+  BookX,
+  Backpack,
+  Mail,
+  Hash,
+  HelpCircle,
+  Search,
+  CheckCircle2,
+  KeyRound,
+  Copy,
+  ShieldCheck,
+  Clock3,
+  Users,
+  School,
+} from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 const educationTicketSchema = z.object({
@@ -48,27 +68,6 @@ const educationTicketSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ["schoolId"],
       message: "Selecciona el colegio",
-    });
-  }
-  if (values.subjectType === "Alumno" && !values.studentEnrollment?.trim()) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["studentEnrollment"],
-      message: "La matrícula es obligatoria cuando la consulta es sobre un alumno",
-    });
-  }
-  if (values.subjectType === "Alumno" && !values.stage?.trim()) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["stage"],
-      message: "Indica la etapa educativa",
-    });
-  }
-  if (values.subjectType === "Alumno" && !values.course?.trim()) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["course"],
-      message: "Indica el curso",
     });
   }
 });
@@ -131,6 +130,34 @@ function getInitials(name: string | null, surname: string | null, fallbackEmail:
   return fallback.slice(0, 2).toUpperCase() || "AL";
 }
 
+function LanguageFlag({ kind }: { kind: "english" | "frde" }) {
+  if (kind === "english") {
+    return (
+      <div className="relative h-10 w-10 overflow-hidden rounded-full border border-amber-200 bg-[#1f3f95] shadow-sm">
+        <div className="absolute inset-x-0 top-[42%] h-[16%] bg-white" />
+        <div className="absolute inset-y-0 left-[42%] w-[16%] bg-white" />
+        <div className="absolute inset-x-0 top-[46%] h-[8%] bg-[#d62828]" />
+        <div className="absolute inset-y-0 left-[46%] w-[8%] bg-[#d62828]" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-10 w-10 flex-col overflow-hidden rounded-full border border-amber-200 bg-white shadow-sm">
+      <div className="flex h-1/2 w-full overflow-hidden">
+        <div className="h-full flex-1 bg-[#1f4fbf]" />
+        <div className="h-full flex-1 bg-white" />
+        <div className="h-full flex-1 bg-[#e53935]" />
+      </div>
+      <div className="flex h-1/2 w-full flex-col">
+        <div className="h-1/3 w-full bg-black" />
+        <div className="h-1/3 w-full bg-[#d62828]" />
+        <div className="h-1/3 w-full bg-[#ffce00]" />
+      </div>
+    </div>
+  );
+}
+
 export default function NewEducationTicket() {
   const [, setLocation] = useLocation();
   const { data: user } = useGetMe();
@@ -179,7 +206,7 @@ export default function NewEducationTicket() {
   const selectedSchoolId = form.watch("schoolId");
   const studentEmail = form.watch("studentEmail");
   const subjectType = form.watch("subjectType");
-  const supportsTeacherSubject = ["visor_cliente", "admin_cliente", "manager"].includes(user?.role || "");
+  const supportsTeacherSubject = ["visor_cliente", "admin_cliente", "manager", "usuario_cliente"].includes(user?.role || "");
   const isTeacherSubject = subjectType === "Docente";
   const isOwnAccountSubject = subjectType === "SobreMiCuenta";
   const hasSelectedSubjectType =
@@ -224,7 +251,30 @@ export default function NewEducationTicket() {
     shouldUseSimplifiedAlumnoFlow ||
     (subjectType === "Alumno" && shouldShowMochilasLookup && !mochilaLookup);
   const shouldShowTeacherTicketFields = isTeacherSubject;
-  const canSubmitForm = shouldShowTeacherTicketFields || !shouldHideExtendedFields || shouldUseSimplifiedAlumnoFlow;
+  const shouldShowOwnAccountFields = isOwnAccountSubject;
+  const canSubmitForm =
+    shouldShowTeacherTicketFields ||
+    shouldShowOwnAccountFields ||
+    !shouldHideExtendedFields ||
+    shouldUseSimplifiedAlumnoFlow;
+
+  useEffect(() => {
+    if (!mochilaLookup) return;
+
+    requestAnimationFrame(() => {
+      const node = document.getElementById("mochila-result-card");
+      if (!node) return;
+
+      const rect = node.getBoundingClientRect();
+      const targetTop = window.scrollY + rect.top - Math.max(48, (window.innerHeight - rect.height) / 2);
+
+      window.scrollTo({
+        top: Math.max(0, targetTop),
+        behavior: "smooth",
+      });
+    });
+  }, [mochilaLookup]);
+
   const summarizedMochilaRecords = useMemo(() => {
     if (!mochilaLookup) return [];
 
@@ -361,14 +411,18 @@ export default function NewEducationTicket() {
       const result = await customFetch<MochilaLookupResult>(`/api/tickets/mochilas/student?${params.toString()}`);
       setMochilaLookup(result);
     } catch (error) {
+      const outsideTenant =
+        error instanceof ApiError &&
+        error.status === 404 &&
+        error.message.toLowerCase().includes("no pertenece a ningun centro de la red educativa");
       const message =
-        error instanceof ApiError && error.status === 404
+        error instanceof ApiError && error.status === 404 && !outsideTenant
           ? "No existe informacion del alumno en Mochilas o su compra aun no ha sido activada."
           : error instanceof Error
             ? error.message
             : "No se pudo consultar la informacion de Mochilas.";
 
-      if (error instanceof ApiError && error.status === 404) {
+      if (error instanceof ApiError && error.status === 404 && !outsideTenant) {
         setMochilaActivationSuggested(true);
       }
 
@@ -409,10 +463,16 @@ export default function NewEducationTicket() {
         form.setValue("studentEmail", result.studentEmail);
       }
     } catch (error) {
+      const outsideTenant =
+        error instanceof ApiError &&
+        error.status === 404 &&
+        error.message.toLowerCase().includes("no pertenece a ningun centro de la red educativa");
       const message =
-        error instanceof ApiError && error.status === 404
+        error instanceof ApiError && error.status === 404 && !outsideTenant
           ? "Pedido no encontrado. No es mochila, o no ha sido procesado aun."
-          : "No se pudo consultar la informacion del pedido en Mochilas.";
+          : error instanceof Error
+            ? error.message
+            : "No se pudo consultar la informacion del pedido en Mochilas.";
 
       setMochilaLookupError(message);
       toast({
@@ -536,6 +596,75 @@ export default function NewEducationTicket() {
           inquiryType: "Solicitud de alta",
           teacherRegistrationRequested: true,
           teacherRegistrationNotes: teacherRegistrationNotes.trim() || null,
+        },
+        tenantId,
+        schoolId,
+      },
+    });
+  }
+
+  function createTeacherDirectTicket(kind: "access" | "registration") {
+    const values = form.getValues();
+    const teacherEmail = values.studentEmail.trim().toLowerCase();
+    const teacherDescription = values.description?.trim() || "";
+
+    if (!teacherEmail) {
+      form.setError("studentEmail", {
+        type: "manual",
+        message: "Indica el correo del docente",
+      });
+      return;
+    }
+
+    if (!teacherDescription) {
+      form.setError("description", {
+        type: "manual",
+        message: kind === "registration"
+          ? "Añade una breve explicación para la solicitud de alta"
+          : "Describe brevemente lo que le sucede al docente",
+      });
+      return;
+    }
+
+    const schoolName = selectedSchool?.name || user?.schoolName || "Colegio";
+    const tenantId =
+      user?.scopeType === "global"
+        ? (selectedTenantId as number)
+        : (user?.tenantId as number);
+
+    const schoolId =
+      useSessionSchool
+        ? (user?.schoolId as number)
+        : (selectedSchoolId as number);
+
+    quickAccessIssueMutation.mutate({
+      data: {
+        title:
+          kind === "registration"
+            ? `${schoolName} - Solicitud de alta docente`
+            : `${schoolName} - El docente no puede acceder`,
+        description: [
+          `Colegio: ${schoolName}`,
+          `Docente: ${teacherEmail}`,
+          `Informador: ${user?.email ?? "-"}`,
+          `Prioridad: ${values.priority ?? TicketPriority.media}`,
+          kind === "registration"
+            ? "Motivo: Solicitud de alta o activación inicial para docente."
+            : "Motivo: El docente no puede acceder a la plataforma.",
+          `Descripción: ${teacherDescription}`,
+        ].join("\n"),
+        priority: values.priority ?? TicketPriority.media,
+        category: kind === "registration" ? "alta_docente" : "acceso_docente",
+        customFields: {
+          school: schoolName,
+          teacherEmail,
+          affectedEmail: teacherEmail,
+          reporterEmail: user?.email ?? null,
+          subjectType: "Docente",
+          inquiryType: kind === "registration" ? "Solicitud de alta" : "No puede acceder",
+          teacherRegistrationRequested: kind === "registration",
+          teacherRegistrationNotes: kind === "registration" ? teacherDescription : null,
+          description: teacherDescription,
         },
         tenantId,
         schoolId,
@@ -676,6 +805,14 @@ export default function NewEducationTicket() {
       return;
     }
 
+    if (data.subjectType === "SobreMiCuenta" && !data.description?.trim()) {
+      form.setError("description", {
+        type: "manual",
+        message: "Describe brevemente lo que te sucede",
+      });
+      return;
+    }
+
     if (subjectType === "Alumno" && shouldShowMochilasLookup) {
       const normalizedStudentEmail = data.studentEmail.trim().toLowerCase();
       if (!mochilaLookup || mochilaLookup.studentEmail !== normalizedStudentEmail) {
@@ -703,7 +840,10 @@ export default function NewEducationTicket() {
       ? (user?.email ?? null)
       : (data.reporterEmail?.trim().toLowerCase() || null);
 
-    const normalizedAffectedEmail = data.studentEmail.trim().toLowerCase();
+    const normalizedAffectedEmail =
+      data.subjectType === "SobreMiCuenta"
+        ? (user?.email ?? "").trim().toLowerCase()
+        : data.studentEmail.trim().toLowerCase();
     const selectedIssueLabels = selectedActionItems.flatMap((item) =>
       item.actions.map((action) => (action === "return" ? "Devolución" : "No ve el libro"))
     );
@@ -711,6 +851,8 @@ export default function NewEducationTicket() {
     const title =
       data.subjectType === "Docente"
         ? `${schoolName} - El docente no puede acceder`
+        : data.subjectType === "SobreMiCuenta"
+        ? `${schoolName} - Consulta sobre mi cuenta`
         : `${schoolName} - ${primaryIssueLabel}`;
     const description = data.subjectType === "Docente"
       ? [
@@ -718,6 +860,15 @@ export default function NewEducationTicket() {
           `Docente: ${normalizedAffectedEmail}`,
           reporterEmail ? `Informador: ${reporterEmail}` : null,
           "Consulta sobre: Docente",
+          `Prioridad: ${data.priority ?? TicketPriority.media}`,
+          `Descripción: ${data.description}`,
+        ].filter(Boolean).join("\n")
+      : data.subjectType === "SobreMiCuenta"
+      ? [
+          `Colegio: ${schoolName}`,
+          `Usuario: ${normalizedAffectedEmail}`,
+          reporterEmail ? `Informador: ${reporterEmail}` : null,
+          "Consulta sobre: Sobre mi cuenta",
           `Prioridad: ${data.priority ?? TicketPriority.media}`,
           `Descripción: ${data.description}`,
         ].filter(Boolean).join("\n")
@@ -753,7 +904,12 @@ export default function NewEducationTicket() {
         title,
         description,
         priority: data.priority,
-        category: data.subjectType === "Docente" ? "acceso_docente" : "consulta_educativa",
+        category:
+          data.subjectType === "Docente"
+            ? "acceso_docente"
+            : data.subjectType === "SobreMiCuenta"
+            ? "acceso_cuenta_propia"
+            : "consulta_educativa",
         customFields: {
           school: schoolName,
           studentEmail: data.subjectType === "Alumno" ? normalizedAffectedEmail : null,
@@ -765,7 +921,12 @@ export default function NewEducationTicket() {
           stage: data.stage || null,
           course: data.course || null,
           subject: data.subject || null,
-          inquiryType: data.subjectType === "Docente" ? "No puede acceder" : data.inquiryType,
+          inquiryType:
+            data.subjectType === "Docente"
+              ? "No puede acceder"
+              : data.subjectType === "SobreMiCuenta"
+              ? "Sobre mi cuenta"
+              : data.inquiryType,
           observations: data.observations || null,
           mochilaLookup,
           lineActions: subjectType === "Alumno" && selectedActionItems.length > 0 ? selectedActionItems : null,
@@ -923,129 +1084,62 @@ export default function NewEducationTicket() {
               />
 
               {subjectType === "SobreMiCuenta" && (
-                <div
-                  className="space-y-4 rounded-2xl border p-4"
-                  style={{ backgroundColor: tenantPanelBackground, borderColor: tenantPanelBorder, color: tenantPanelText }}
-                >
+                <div className="space-y-5 rounded-[28px] border border-violet-200 bg-gradient-to-br from-[#ffffff] via-[#faf7ff] to-[#f2eeff] p-5 shadow-[0_20px_60px_rgba(79,70,229,0.10)]">
                   <div>
-                    <h3 className="text-sm font-semibold" style={{ color: tenantPanelText }}>Recuperación de acceso docente</h3>
-                    <p className="mt-1 text-xs" style={{ color: tenantPanelMuted }}>
-                      La consulta es sobre mi cuenta. Usa los accesos directos para recuperar el acceso o registrar una incidencia.
+                    <h3 className="text-xl font-bold tracking-tight text-slate-950">Consulta sobre mi cuenta</h3>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Indica la prioridad y describe lo que te sucede para enviar la consulta.
                     </p>
                   </div>
 
-                  <div className="rounded-xl border px-4 py-3" style={{ borderColor: tenantPanelBorder, backgroundColor: "rgba(255,255,255,0.12)" }}>
-                    <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: tenantPanelMuted }}>Sobre mi cuenta</p>
-                    <p className="mt-1 text-sm font-medium" style={{ color: tenantPanelText }}>{user?.email || "-"}</p>
+                  <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sobre mi cuenta</p>
+                    <p className="mt-1 text-sm font-medium text-slate-900">{user?.email || "-"}</p>
                   </div>
 
-                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                    <Button type="button" onClick={handleForgotTeacherEnglishPassword}>
-                      He olvidado mi contraseña de Inglés
-                    </Button>
-                    <Button type="button" onClick={handleForgotTeacherBlinkPassword}>
-                      He olvidado mi contraseña de Francés/Alemán
-                    </Button>
-                    <Button
-                      type="button"
-                      onClick={createAccessIssueTicket}
-                      disabled={quickAccessIssueMutation.isPending}
-                    >
-                      {quickAccessIssueMutation.isPending ? "Creando consulta..." : "Aún continúo sin poder acceder"}
-                    </Button>
-                    <Button
-                      type="button"
-                      onClick={() => setShowTeacherRegistrationRequest((current) => !current)}
-                    >
-                      Solicitar alta
-                    </Button>
-                  </div>
+                  <div className="grid gap-4 lg:grid-cols-[12rem_1fr]">
+                    <FormField
+                      control={form.control}
+                      name="priority"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Prioridad</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecciona prioridad" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value={TicketPriority.baja}>Baja</SelectItem>
+                              <SelectItem value={TicketPriority.media}>Media</SelectItem>
+                              <SelectItem value={TicketPriority.alta}>Alta</SelectItem>
+                              <SelectItem value={TicketPriority.urgente}>Urgente</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                  {showTeacherRegistrationRequest && (
-                    <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">Solicitud de alta docente</p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          Añade algún dato útil para el equipo técnico y registraremos la solicitud directamente.
-                        </p>
-                      </div>
-                      <Textarea
-                        value={teacherRegistrationNotes}
-                        onChange={(event) => setTeacherRegistrationNotes(event.target.value)}
-                        placeholder="Ejemplo: etapa, asignatura, plataforma afectada, si es alta nueva o reactivación..."
-                        className="min-h-[120px] resize-y"
-                      />
-                      <div className="flex justify-end">
-                        <Button
-                          type="button"
-                          onClick={createTeacherRegistrationTicket}
-                          disabled={quickAccessIssueMutation.isPending}
-                        >
-                          {quickAccessIssueMutation.isPending ? "Creando solicitud..." : "Crear solicitud de alta"}
-                        </Button>
-                      </div>
+                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                      <p className="text-sm font-semibold text-slate-900">Tu consulta se tratará con confidencialidad</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">
+                        Describe brevemente el problema y el equipo técnico lo revisará contigo.
+                      </p>
                     </div>
-                  )}
-                </div>
-              )}
-
-              {subjectType === "Docente" && (
-                <div className="space-y-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div>
-                    <h3 className="text-sm font-semibold text-slate-900">Incidencia de acceso para docente</h3>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Indica el correo del docente, la prioridad y una breve descripcion de lo que le sucede para enviar la solicitud.
-                    </p>
                   </div>
-
-                  <FormField
-                    control={form.control}
-                    name="studentEmail"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email del docente *</FormLabel>
-                        <FormControl>
-                          <Input placeholder="docente@centro.es" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="priority"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Prioridad</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecciona prioridad" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value={TicketPriority.baja}>Baja</SelectItem>
-                            <SelectItem value={TicketPriority.media}>Media</SelectItem>
-                            <SelectItem value={TicketPriority.alta}>Alta</SelectItem>
-                            <SelectItem value={TicketPriority.urgente}>Urgente</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
 
                   <FormField
                     control={form.control}
                     name="description"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Descripcion de lo que le sucede *</FormLabel>
+                        <FormLabel>Descripción / observaciones *</FormLabel>
                         <FormControl>
                           <Textarea
-                            placeholder="Describe brevemente el problema de acceso del docente..."
-                            className="min-h-[140px] resize-y"
+                            placeholder="Describe brevemente el problema de acceso o lo que necesitas revisar..."
+                            className="min-h-[140px] resize-y rounded-2xl border-slate-200 bg-white"
                             {...field}
                           />
                         </FormControl>
@@ -1056,67 +1150,196 @@ export default function NewEducationTicket() {
                 </div>
               )}
 
-              {shouldShowMochilasLookup && (
-                <div
-                  className="space-y-5 rounded-[28px] border p-5 md:p-6"
-                  style={{ backgroundColor: mochilasPanelBackground, borderColor: mochilasPanelBorder }}
-                >
+              {subjectType === "Docente" && (
+                <div className="space-y-5 rounded-[28px] border border-violet-200 bg-gradient-to-br from-[#ffffff] via-[#faf7ff] to-[#f2eeff] p-5 shadow-[0_20px_60px_rgba(79,70,229,0.10)]">
                   <div>
-                    <h3 className="text-2xl font-semibold tracking-tight" style={{ color: tenantPanelText }}>Búsqueda de Mochilas</h3>
-                    <p className="mt-2 text-sm leading-6" style={{ color: tenantPanelMuted }}>
-                      Busca usando el correo electrónico del alumno o el número de pedido para consultar su información de acceso.
+                    <h3 className="text-xl font-bold tracking-tight text-slate-950">Consulta sobre docente</h3>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Indica el correo del docente, la prioridad y una breve descripción para enviar la solicitud.
                     </p>
                   </div>
 
+                  <div className="grid gap-4 lg:grid-cols-[minmax(16rem,1fr)_12rem]">
+                    <FormField
+                      control={form.control}
+                      name="studentEmail"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email del docente *</FormLabel>
+                          <FormControl>
+                            <Input placeholder="docente@centro.es" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="priority"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Prioridad</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecciona prioridad" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value={TicketPriority.baja}>Baja</SelectItem>
+                              <SelectItem value={TicketPriority.media}>Media</SelectItem>
+                              <SelectItem value={TicketPriority.alta}>Alta</SelectItem>
+                              <SelectItem value={TicketPriority.urgente}>Urgente</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <Button
+                      type="button"
+                      className="h-11 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 px-5 text-white shadow-[0_12px_24px_rgba(99,102,241,0.24)] hover:from-violet-700 hover:to-indigo-700"
+                      onClick={() => createTeacherDirectTicket("access")}
+                      disabled={quickAccessIssueMutation.isPending}
+                    >
+                      No puede acceder
+                    </Button>
+                    <Button
+                      type="button"
+                      className="h-11 rounded-full bg-gradient-to-r from-emerald-500 to-green-600 px-5 text-white shadow-[0_12px_24px_rgba(34,197,94,0.24)] hover:from-emerald-600 hover:to-green-700"
+                      onClick={() => createTeacherDirectTicket("registration")}
+                      disabled={quickAccessIssueMutation.isPending}
+                    >
+                      Solicitar alta
+                    </Button>
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Describe brevemente el problema de acceso del docente..."
+                            className="min-h-[120px] resize-y rounded-2xl border-slate-200 bg-white"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <div className="rounded-[22px] border border-slate-200 bg-white px-4 py-4 shadow-[0_10px_22px_rgba(15,23,42,0.06)]">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                          <ShieldCheck className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">Seguro</p>
+                          <p className="mt-1 text-xs leading-6 text-slate-500">Tus datos están protegidos y solo son visibles para personal autorizado.</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="rounded-[22px] border border-slate-200 bg-white px-4 py-4 shadow-[0_10px_22px_rgba(15,23,42,0.06)]">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                          <Clock3 className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">Rápido</p>
+                          <p className="mt-1 text-xs leading-6 text-slate-500">Encuentra la información que necesitas en segundos, sin complicaciones.</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="rounded-[22px] border border-slate-200 bg-white px-4 py-4 shadow-[0_10px_22px_rgba(15,23,42,0.06)]">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-600">
+                          <Users className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">Soporte</p>
+                          <p className="mt-1 text-xs leading-6 text-slate-500">Si tienes dudas, nuestro equipo está aquí para ayudarte.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {shouldShowMochilasLookup && (
+                <div
+                  className={
+                    mochilaLookup
+                      ? "space-y-6"
+                      : "space-y-6 rounded-[32px] border border-violet-200/80 bg-gradient-to-br from-[#ffffff] via-[#faf7ff] to-[#f2eeff] p-6 shadow-[0_28px_80px_rgba(79,70,229,0.14)]"
+                  }
+                >
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start">
+                    <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[28px] border border-violet-200 bg-gradient-to-br from-[#ece7ff] to-[#d7ceff] shadow-[0_14px_30px_rgba(99,102,241,0.18)]">
+                      <Backpack className="h-10 w-10 text-violet-700" />
+                    </div>
+                    <div>
+                      <h3 className="text-5xl font-bold tracking-tight text-slate-950">Búsqueda de Mochilas</h3>
+                        <p className="mt-2 max-w-2xl text-base leading-7 text-slate-600">
+                          Consulta datos de acceso y libros activados usando el correo del alumno o el pedido.
+                        </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[28px] border border-violet-200 bg-white/95 p-5 shadow-[0_12px_30px_rgba(99,102,241,0.08)]">
                   {(mochilasEnabled || useSessionSchool) && (
-                    <div className="grid gap-3 md:grid-cols-[minmax(17rem,20rem)_auto_auto] md:items-end">
+                    <div className="grid gap-5 xl:grid-cols-[1fr_1px_0.92fr] xl:items-end">
                       <FormField
                         control={form.control}
                         name="studentEmail"
                         render={({ field }) => (
-                          <FormItem>
-                            <FormLabel style={{ color: tenantPanelText }}>Email del alumno *</FormLabel>
-                            <FormControl>
-                              <Input
-                                placeholder="alumno@centro.es"
-                                className="font-normal text-slate-900 placeholder:font-normal placeholder:!text-slate-400"
-                                style={panelInputStyle}
-                                autoComplete="off"
-                                onKeyDown={(event) => {
-                                  if (event.key === "Enter") {
-                                    event.preventDefault();
-                                    void lookupStudentInMochilas();
-                                  }
-                                }}
-                                {...field}
-                              />
-                            </FormControl>
+                          <FormItem className="space-y-3">
+                            <div className="flex items-center gap-2">
+                              <FormLabel className="m-0 text-base font-semibold text-slate-900">Email del alumno</FormLabel>
+                              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-violet-100 text-violet-600">
+                                <Mail className="h-4 w-4" />
+                              </span>
+                              <span className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-500">
+                                <HelpCircle className="h-4 w-4" />
+                              </span>
+                            </div>
+                            <div className="grid gap-3 md:grid-cols-[minmax(18rem,1fr)_auto]">
+                              <FormControl>
+                                <Input
+                                  placeholder="alumno@centro.es"
+                                  className="h-12 rounded-2xl border-slate-200 bg-white text-slate-900 placeholder:text-slate-400"
+                                  autoComplete="off"
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter") {
+                                      event.preventDefault();
+                                      void lookupStudentInMochilas();
+                                    }
+                                  }}
+                                  {...field}
+                                />
+                              </FormControl>
+                              <Button
+                                type="button"
+                                className="h-12 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 text-white shadow-[0_12px_24px_rgba(99,102,241,0.28)] hover:from-violet-700 hover:to-indigo-700"
+                                onClick={lookupStudentInMochilas}
+                                disabled={isLookingUpMochila || !(selectedTenantId || user?.tenantId)}
+                              >
+                                <Search className="mr-2 h-4 w-4" />
+                                {isLookingUpMochila ? "Buscando..." : "Buscar en mochilas"}
+                              </Button>
+                            </div>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-
-                      <div className="flex items-end">
-                        <Button
-                          type="button"
-                          className="w-full md:w-auto"
-                          onClick={lookupStudentInMochilas}
-                          disabled={isLookingUpMochila || !(selectedTenantId || user?.tenantId)}
-                        >
-                          {isLookingUpMochila ? "Buscando..." : "Buscar en mochilas"}
-                        </Button>
-                      </div>
-                      <div className="flex items-end">
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          className="w-full md:w-auto"
-                          onClick={resetMochilasLookupState}
-                        >
-                          <RefreshCcw className="mr-2 h-4 w-4" />
-                          Limpiar
-                        </Button>
-                      </div>
+                      <div className="hidden bg-violet-100 xl:block" />
                     </div>
                   )}
 
@@ -1154,6 +1377,7 @@ export default function NewEducationTicket() {
                       </div>
                     </div>
                   )}
+                  </div>
 
                   {mochilaLookupError && (
                     <div className="space-y-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -1167,31 +1391,35 @@ export default function NewEducationTicket() {
                   )}
 
                   {mochilaLookup && (
-                    <div className="space-y-4 rounded-[24px] border border-white/60 bg-white/95 p-4 shadow-[0_20px_60px_rgba(15,23,42,0.12)] backdrop-blur">
-                      <div className="grid gap-4 lg:grid-cols-[1.05fr_1fr]">
-                        <div className="overflow-hidden rounded-[20px] border border-slate-200">
-                          <div className="flex items-start gap-4 border-b border-slate-200 p-4">
-                            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-2xl font-semibold text-indigo-600">
-                              {getInitials(mochilaLookup.studentName, mochilaLookup.studentSurname, mochilaLookup.studentEmail)}
+                    <div id="mochila-result-card" className="space-y-5 rounded-[28px] border border-violet-200 bg-white p-5 shadow-[0_20px_60px_rgba(79,70,229,0.10)]">
+                      <div className="grid gap-5 xl:grid-cols-[0.92fr_1.08fr]">
+                        <div className="overflow-hidden rounded-[24px] border border-violet-100 bg-white shadow-[0_12px_30px_rgba(99,102,241,0.08)]">
+                            <div className="border-b border-violet-100 p-5">
+                              <div className="flex flex-col items-start gap-4">
+                                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#cec7ff] to-[#7e6cff] text-4xl font-semibold text-white shadow-[0_16px_34px_rgba(124,108,255,0.28)]">
+                                  {getInitials(mochilaLookup.studentName, mochilaLookup.studentSurname, mochilaLookup.studentEmail)}
+                                </div>
+                                <div className="min-w-0">
+                                  <span className="inline-flex rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-violet-700">
+                                    Alumno
+                                  </span>
+                                  <p className="mt-3 max-w-[13rem] text-[1.55rem] font-bold leading-[1.08] tracking-[-0.02em] text-slate-950">
+                                    {[mochilaLookup.studentName, mochilaLookup.studentSurname].filter(Boolean).join(" ") || "Sin nombre"}
+                                  </p>
+                                </div>
+                              </div>
                             </div>
-                            <div className="min-w-0">
-                              <p className="text-lg font-semibold text-slate-900">
-                                {[mochilaLookup.studentName, mochilaLookup.studentSurname].filter(Boolean).join(" ") || "Sin nombre"}
-                              </p>
-                              <p className="mt-1 truncate text-sm text-slate-500">{mochilaLookup.studentEmail}</p>
-                            </div>
-                          </div>
-                          <div className="p-4">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Colegios detectados</p>
+                          <div className="p-5">
+                            <p className="text-sm font-semibold text-slate-700">Colegio</p>
                             <div className="mt-3 space-y-3">
                               {mochilaLookup.schools.map((school) => (
-                                <div key={school} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                                  <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Desde</p>
+                                <div key={school} className="rounded-2xl border border-violet-100 bg-gradient-to-br from-white to-[#f8f5ff] p-4">
+                                  <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Colegio</p>
                                   <div className="mt-2 flex items-center gap-3">
-                                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600">
-                                      <Building2 className="h-5 w-5" />
+                                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-100 text-violet-600">
+                                      <Building2 className="h-10 w-5" />
                                     </div>
-                                    <p className="text-base font-semibold leading-tight text-indigo-700">{school}</p>
+                                    <p className="text-base font-semibold leading-tight text-slate-900">{school}</p>
                                   </div>
                                 </div>
                               ))}
@@ -1199,80 +1427,156 @@ export default function NewEducationTicket() {
                           </div>
                         </div>
 
-                        <div className="rounded-[20px] border border-slate-200 p-4">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Credenciales</p>
-                          <div className="mt-3 space-y-3">
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                              <div className="min-w-0">
-                                <p className="text-sm text-slate-500">Email del alumno:</p>
-                                <p className="truncate text-sm font-medium text-slate-900">{mochilaLookup.studentEmail || "-"}</p>
+                        <div className="space-y-3 rounded-[24px] border border-violet-100 bg-white p-5 shadow-[0_12px_30px_rgba(99,102,241,0.08)]">
+                          <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-100 text-violet-600">
+                                <KeyRound className="h-5 w-5" />
                               </div>
-                              <Button type="button" size="sm" variant="outline" onClick={handleChangeStudentEmail}>
-                                Cambiar email
-                              </Button>
+                              <div>
+                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Credenciales</p>
+                                <p className="text-sm text-slate-500">Datos de acceso detectados</p>
+                              </div>
+                            </div>
+                            <Button type="button" size="sm" variant="outline" className="rounded-2xl border-slate-300 bg-white" onClick={handleChangeStudentEmail}>
+                              <Mail className="mr-2 h-4 w-4" />
+                              Cambiar email
+                            </Button>
+                          </div>
+
+                          <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
+                            <div className="space-y-2">
+                              <div>
+                                <p className="text-sm text-slate-500">Email del alumno</p>
+                                <p className="text-base font-semibold text-slate-900">{mochilaLookup.studentEmail || "-"}</p>
+                              </div>
+                              <div>
+                                <p className="text-sm text-slate-500">Usuario</p>
+                                <div className="mt-1 flex items-center gap-1">
+                                  <p className="text-base font-semibold text-slate-900">
+                                    {mochilaLookup.studentUser || "-"}
+                                  </p>
+                                  <button
+                                    type="button"
+                                    className="rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                                    onClick={async () => {
+                                      if (!mochilaLookup.studentUser) return;
+                                      await navigator.clipboard.writeText(mochilaLookup.studentUser);
+                                      toast({ title: "Usuario copiado", description: "Se ha copiado el usuario del alumno." });
+                                    }}
+                                  >
+                                    <Copy className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </div>
                             </div>
                             <div>
-                              <p className="text-sm text-slate-500">Usuario:</p>
-                              <p className="break-all text-sm font-medium text-slate-900">{mochilaLookup.studentUser || "-"}</p>
-                            </div>
-                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                  <p className="text-sm text-slate-500">Contraseña inglés:</p>
-                                  <p className="text-sm font-medium text-slate-900">{studentEnglishCredential?.password || "-"}</p>
-                                </div>
-                                <Button type="button" size="sm" onClick={handleForgotStudentEnglishPassword}>
-                                  Cambiar contraseña
-                                </Button>
+                              <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-600">
+                                <CheckCircle2 className="h-4 w-4" />
+                                Verificado
                               </div>
                             </div>
-                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                  <p className="text-sm text-slate-500">Contraseña francés/alemán:</p>
-                                  <p className="text-sm font-medium text-slate-900">{studentBlinkCredential?.password || "-"}</p>
-                                </div>
-                                <Button type="button" size="sm" onClick={handleForgotStudentBlinkPassword}>
-                                  Cambiar contraseña
-                                </Button>
+                          </div>
+
+                          <div className="rounded-[24px] border border-amber-300 bg-gradient-to-br from-[#fffaf0] to-[#fff2dd] p-4 shadow-[0_12px_30px_rgba(251,191,36,0.12)]">
+                            <div className="flex items-start gap-3">
+                              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-200/70 text-amber-700">
+                                <KeyRound className="h-6 w-6" />
+                              </div>
+                              <div>
+                                <p className="text-lg font-bold tracking-tight text-slate-950 sm:text-[0.90rem]">¿Intenta recuperar la contraseña del alumno?</p>
+                                  <p className="mt-1 text-sm leading-7 text-slate-600">
+                                    Desde aquí puedes intentar recuperar sus contraseñas a las plataformas.
+                                  </p>
                               </div>
                             </div>
-                            <div className="rounded-2xl border border-violet-200 bg-violet-50 p-3">
-                              <div className="flex items-start gap-2">
-                                <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-violet-500" />
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-medium text-slate-700">¿Aún continúas sin poder acceder?</p>
-                                  <p className="text-xs text-slate-500">Contacta con soporte técnico</p>
+
+                            <div className="mt-4 space-y-3">
+                              <div className="rounded-2xl border border-amber-200 bg-white px-4 py-4 shadow-sm">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                  <div className="flex items-start gap-3">
+                                    <LanguageFlag kind="english" />
+                                    <div>
+                                      <p className="text-sm font-semibold text-slate-900">Inglés</p>
+                                      <p className="mt-1 text-sm text-slate-600">{studentEnglishCredential?.password || "-"}</p>
+                                    </div>
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    className="h-10 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-5 text-sm text-white hover:from-amber-600 hover:to-orange-600"
+                                    onClick={handleForgotStudentEnglishPassword}
+                                  >
+                                    Cambiar contraseña
+                                  </Button>
                                 </div>
                               </div>
-                              <div className="mt-3 flex justify-end">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  onClick={createAccessIssueTicket}
-                                  disabled={quickAccessIssueMutation.isPending}
-                                >
-                                  {quickAccessIssueMutation.isPending ? "Creando consulta..." : "Contactar soporte"}
-                                </Button>
+
+                              <div className="rounded-2xl border border-amber-200 bg-white px-4 py-4 shadow-sm">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                  <div className="flex items-start gap-3">
+                                    <LanguageFlag kind="frde" />
+                                    <div>
+                                      <p className="text-sm font-semibold text-slate-900">Francés/alemán</p>
+                                      <p className="mt-1 text-sm text-slate-600">{studentBlinkCredential?.password || "-"}</p>
+                                    </div>
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    className="h-10 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-5 text-sm text-white hover:from-amber-600 hover:to-orange-600"
+                                    onClick={handleForgotStudentBlinkPassword}
+                                  >
+                                    Cambiar contraseña
+                                  </Button>
+                                </div>
                               </div>
+
                             </div>
                           </div>
                         </div>
                       </div>
 
-                      <div className="space-y-3">
-                        <p className="text-sm font-semibold text-slate-600">Colegios detectados</p>
-                        <div className="overflow-hidden rounded-[20px] border border-slate-200 bg-white">
+                      <div className="rounded-[24px] border border-violet-200 bg-gradient-to-r from-[#f4efff] to-[#f7f5ff] px-5 py-4 shadow-[0_10px_30px_rgba(99,102,241,0.08)]">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-violet-600 text-white shadow-[0_12px_28px_rgba(99,102,241,0.28)]">
+                              <Users className="h-6 w-6" />
+                            </div>
+                            <div>
+                              <p className="text-2xl font-bold tracking-tight text-slate-950">¿Aún continúas sin poder acceder?</p>
+                              <p className="text-sm text-slate-600">Nuestro equipo de soporte puede ayudarte.</p>
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            className="rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 text-white shadow-[0_12px_24px_rgba(99,102,241,0.25)] hover:from-violet-700 hover:to-indigo-700"
+                            onClick={createAccessIssueTicket}
+                            disabled={quickAccessIssueMutation.isPending}
+                          >
+                            {quickAccessIssueMutation.isPending ? "Creando consulta..." : "Contactar soporte"}
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-100 text-violet-600">
+                            <Building2 className="h-5 w-5" />
+                          </div>
+                          <p className="text-3xl font-bold tracking-tight text-slate-950">Libros activos</p>
+                        </div>
+                        <div className="overflow-hidden rounded-[24px] border border-violet-200 bg-white shadow-[0_14px_34px_rgba(99,102,241,0.08)]">
                           <table className="w-full text-sm">
-                            <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500">
-                            <tr>
-                              <th className="px-3 py-3 font-semibold">Descripción</th>
-                              <th className="px-3 py-3 font-semibold">ISBN</th>
-                              <th className="px-3 py-3 font-semibold">Pedido</th>
-                              <th className="px-3 py-3 font-semibold">Código</th>
-                              <th className="px-3 py-3 font-semibold">Goog</th>
-                              <th className="px-3 py-3 font-semibold text-right">Acciones</th>
-                            </tr>
+                            <thead className="bg-[#f3efff] text-left text-[11px] uppercase tracking-wide text-slate-500">
+                              <tr>
+                                <th className="px-4 py-3 font-semibold">Descripción</th>
+                                <th className="px-4 py-3 font-semibold">ISBN</th>
+                                <th className="px-4 py-3 font-semibold">Pedido</th>
+                                <th className="px-4 py-3 font-semibold">Goog</th>
+                                <th className="px-4 py-3 font-semibold">Código de libro</th>
+                                <th className="px-4 py-3 font-semibold text-right">Acciones</th>
+                              </tr>
                             </thead>
                             <tbody>
                               {summarizedMochilaRecords.map((record) => {
@@ -1284,35 +1588,39 @@ export default function NewEducationTicket() {
                                 return (
                                   <tr
                                     key={record.key}
-                                    className={`border-t border-slate-200 align-top ${hasSelectedActions ? "bg-amber-50" : ""}`}
+                                    className={`border-t border-violet-100 align-top ${hasSelectedActions ? "bg-amber-50/70" : "bg-white"}`}
                                   >
-                                    <td className="px-3 py-3 text-slate-900">{record.description}</td>
-                                    <td className="px-3 py-3 text-slate-900">{record.isbn}</td>
-                                    <td className="px-3 py-3 text-slate-900">{record.orderId}</td>
-                                    <td className="whitespace-nowrap px-3 py-3 text-slate-900">{record.bookCode}</td>
-                                    <td className="px-3 py-3 text-slate-900">{record.google}</td>
-                                    <td className="px-3 py-3 text-right">
+                                    <td className="px-4 py-4 text-slate-900">{record.description}</td>
+                                    <td className="px-4 py-4 text-slate-900">{record.isbn}</td>
+                                    <td className="px-4 py-4 text-slate-900">{record.orderId}</td>
+                                    <td className="px-4 py-4 text-slate-900">{record.google}</td>
+                                    <td className="whitespace-nowrap px-4 py-4 text-slate-900">{record.bookCode}</td>
+                                    <td className="px-4 py-4 text-right">
                                       <div className="flex justify-end gap-2">
                                         <Button
                                           type="button"
                                           size="icon"
                                           variant={isSelectedMissingBook ? "default" : "outline"}
-                                          className="h-9 w-9"
+                                          className={isSelectedMissingBook ? "h-10 w-10 rounded-xl bg-violet-600 text-white hover:bg-violet-700" : "h-10 w-10 rounded-xl border-violet-200 text-violet-600 hover:bg-violet-50"}
                                           onClick={() => toggleLineAction(record.key, "missing_book")}
                                           title="No ve el libro"
+                                          aria-label="No ve el libro"
                                         >
                                           <BookX className="h-4 w-4" />
                                         </Button>
-                                        <Button
-                                          type="button"
-                                          size="icon"
-                                          variant={isSelectedForReturn ? "default" : "outline"}
-                                          className="h-9 w-9"
-                                          onClick={() => toggleLineAction(record.key, "return")}
-                                          title="Devolución"
-                                        >
-                                          <Undo2 className="h-4 w-4" />
-                                        </Button>
+                                        {returnsEnabled && (
+                                          <Button
+                                            type="button"
+                                            size="icon"
+                                            variant={isSelectedForReturn ? "default" : "outline"}
+                                            className={isSelectedForReturn ? "h-10 w-10 rounded-xl bg-violet-600 text-white hover:bg-violet-700" : "h-10 w-10 rounded-xl border-violet-200 text-violet-600 hover:bg-violet-50"}
+                                            onClick={() => toggleLineAction(record.key, "return")}
+                                            title="Devolución"
+                                            aria-label="Devolución"
+                                          >
+                                            <Undo2 className="h-4 w-4" />
+                                          </Button>
+                                        )}
                                       </div>
                                     </td>
                                   </tr>
@@ -1320,8 +1628,60 @@ export default function NewEducationTicket() {
                               })}
                             </tbody>
                           </table>
+                          <div className="flex flex-col gap-3 border-t border-violet-100 bg-[#faf8ff] px-4 py-3 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
+                            <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 shadow-sm">
+                              <Copy className="h-4 w-4 text-violet-500" />
+                              Mostrando {summarizedMochilaRecords.length} libro(s)
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button type="button" className="flex h-8 w-8 items-center justify-center rounded-lg border border-violet-200 bg-white text-slate-400">
+                                ‹
+                              </button>
+                              <button type="button" className="flex h-8 min-w-8 items-center justify-center rounded-lg border border-violet-300 bg-violet-100 px-2 font-semibold text-violet-700">
+                                1
+                              </button>
+                              <button type="button" className="flex h-8 w-8 items-center justify-center rounded-lg border border-violet-200 bg-white text-slate-400">
+                                ›
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                        <p className="text-xs text-slate-500">• Mostrando {summarizedMochilaRecords.length} libro(s)</p>
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <div className="rounded-[20px] border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                              <ShieldCheck className="h-6 w-6" />
+                            </div>
+                            <div>
+                              <p className="font-semibold text-slate-900">Seguro</p>
+                              <p className="text-sm text-slate-500">Tus datos están protegidos y solo son visibles para personal autorizado.</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="rounded-[20px] border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                              <Clock3 className="h-6 w-6" />
+                            </div>
+                            <div>
+                              <p className="font-semibold text-slate-900">Rápido</p>
+                              <p className="text-sm text-slate-500">Encuentra la información que necesitas en segundos, sin complicaciones.</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="rounded-[20px] border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-violet-100 text-violet-600">
+                              <Users className="h-6 w-6" />
+                            </div>
+                            <div>
+                              <p className="font-semibold text-slate-900">Soporte</p>
+                              <p className="text-sm text-slate-500">Si tienes dudas, nuestro equipo está aquí para ayudarte.</p>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                       {selectedActionItems.length > 0 && (
                         <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800">
@@ -1365,7 +1725,7 @@ export default function NewEducationTicket() {
                     <FormItem>
                       <FormLabel>Email del alumno *</FormLabel>
                       <FormControl>
-                        <Input placeholder="alumno@centro.es" {...field} />
+                        <Input placeholder="correo@micolegio.com" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -1584,10 +1944,10 @@ export default function NewEducationTicket() {
               <Button type="button" variant="outline" onClick={() => setLocation("/tickets")}>
                 Cancelar
               </Button>
-              {canSubmitForm && (
-                <Button type="submit" disabled={createMutation.isPending}>
-                  {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {subjectType === "Docente" ? "Enviar solicitud" : "Enviar consulta"}
+                {canSubmitForm && subjectType !== "Docente" && (
+                  <Button type="submit" disabled={createMutation.isPending}>
+                    {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {subjectType === "Docente" ? "Enviar solicitud" : "Enviar consulta"}
                 </Button>
               )}
             </CardFooter>
@@ -1597,4 +1957,3 @@ export default function NewEducationTicket() {
     </div>
   );
 }
-
