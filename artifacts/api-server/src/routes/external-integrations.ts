@@ -159,6 +159,8 @@ function buildCustomFields(payload: ExternalPayload) {
 }
 
 async function findDuplicateTicket(externalId: string) {
+  const safeCustomFields = sql`CASE WHEN JSON_VALID(${ticketsTable.customFields}) THEN ${ticketsTable.customFields} ELSE NULL END`;
+
   const duplicateTickets = await db
     .select({
       id: ticketsTable.id,
@@ -167,8 +169,8 @@ async function findDuplicateTicket(externalId: string) {
     .from(ticketsTable)
     .where(
       and(
-        sql`JSON_UNQUOTE(JSON_EXTRACT(${ticketsTable.customFields}, '$.source')) = 'external_integration'`,
-        sql`JSON_UNQUOTE(JSON_EXTRACT(${ticketsTable.customFields}, '$.externalIntegration.externalId')) = ${externalId}`,
+        sql`JSON_UNQUOTE(JSON_EXTRACT(${safeCustomFields}, '$.source')) = 'external_integration'`,
+        sql`JSON_UNQUOTE(JSON_EXTRACT(${safeCustomFields}, '$.externalIntegration.externalId')) = ${externalId}`,
       ),
     )
     .limit(1);
