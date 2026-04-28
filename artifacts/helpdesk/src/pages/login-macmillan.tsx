@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { BookOpenText, Eye, GraduationCap, Loader2, Lock, Mail, PlugZap, Ticket, UserRoundCheck } from "lucide-react";
+import { BookOpenText, Eye, GraduationCap, Headphones, Loader2, Lock, Mail, PlugZap, UserRoundCheck } from "lucide-react";
 import { getDefaultRouteForRole } from "@/lib/default-route";
 import meeLogo from "@/assets/mee-logo.svg";
 
@@ -30,7 +30,7 @@ type CaptchaChallenge = {
 
 const featureItems = [
   {
-    icon: Ticket,
+    icon: Headphones,
     title: "Soporte",
     description: "Tickets de consultas,\natencion rapida.",
   },
@@ -43,7 +43,7 @@ const featureItems = [
     icon: UserRoundCheck,
     title: "Solicitud de\nasistencia",
     description: "Planificacion y gestion\nde intervenciones",
-    accent: true,
+    glow: true,
   },
   {
     icon: GraduationCap,
@@ -54,7 +54,6 @@ const featureItems = [
     icon: PlugZap,
     title: "API externa",
     description: "Conexion segura con\nnuestros sistemas",
-    accent: true,
   },
 ];
 
@@ -83,18 +82,37 @@ function writeRecentLoginEmails(email: string) {
   return nextEmails;
 }
 
-function BridgeWordmark() {
+function HeroWordmark() {
   return (
-    <div className="flex items-center gap-4 lg:gap-5">
-      <div className="relative h-[74px] w-[132px] shrink-0 lg:h-[86px] lg:w-[154px]">
-        <div className="absolute left-[13px] top-0 h-[48px] w-[11px] rounded-full bg-[#082c63] lg:left-[16px] lg:h-[56px] lg:w-[12px]" />
-        <div className="absolute left-[53px] top-0 h-[48px] w-[11px] rounded-full bg-[#ff544c] lg:left-[63px] lg:h-[56px] lg:w-[12px]" />
-        <div className="absolute left-0 top-[25px] h-[43px] w-[80px] rounded-[999px] border-[8px] border-r-0 border-[#082c63] lg:top-[30px] lg:h-[49px] lg:w-[92px] lg:border-[9px]" />
-        <div className="absolute left-[40px] top-[25px] h-[43px] w-[80px] rounded-[999px] border-[8px] border-l-0 border-[#ff6a56] lg:left-[48px] lg:top-[30px] lg:h-[49px] lg:w-[92px] lg:border-[9px]" />
+    <div>
+      <div className="flex flex-wrap items-end gap-2 leading-none">
+        <span className="text-[48px] font-semibold tracking-tight text-white sm:text-[58px] lg:text-[74px]">Macmillan</span>
+        <span className="text-[48px] font-bold tracking-tight text-[#ff7a1a] sm:text-[58px] lg:text-[74px]">Bridge</span>
       </div>
-      <div>
-        <div className="text-[56px] font-bold leading-none tracking-tight text-[#082c63] lg:text-[74px]">Bridge</div>
-        <div className="mt-1 text-[22px] leading-tight text-slate-600 lg:text-[28px]">Plataforma de soporte y servicios</div>
+      <div className="mt-4 h-1 w-14 rounded-full bg-[#ff7a1a]" />
+      <p className="mt-7 text-[24px] leading-tight text-white/95 sm:text-[28px] lg:text-[34px]">
+        Plataforma de soporte y servicios
+      </p>
+    </div>
+  );
+}
+
+function BackgroundRays() {
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_76%_34%,rgba(80,170,255,0.95),rgba(42,112,230,0.74)_16%,rgba(15,54,152,0.42)_32%,rgba(7,31,103,0)_55%)]" />
+      <div className="absolute inset-y-0 left-[22%] right-0 top-[30%] opacity-80">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <div
+            key={index}
+            className="absolute left-0 h-px origin-left rounded-full bg-gradient-to-r from-white/0 via-white/45 to-white/0"
+            style={{
+              top: `${12 + index * 8}%`,
+              width: `${62 + index * 4}%`,
+              transform: `rotate(${index * 6 - 18}deg)`,
+            }}
+          />
+        ))}
       </div>
     </div>
   );
@@ -102,7 +120,6 @@ function BridgeWordmark() {
 
 export default function MacmillanLogin() {
   const [, setLocation] = useLocation();
-  const passwordInputRef = useRef<HTMLInputElement | null>(null);
   const [captchaChallenge, setCaptchaChallenge] = useState<CaptchaChallenge | null>(null);
 
   const form = useForm<LoginFormValues>({
@@ -176,63 +193,40 @@ export default function MacmillanLogin() {
   }
 
   return (
-    <div className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.98),_rgba(242,246,252,0.92)_42%,_rgba(232,238,247,0.95)_100%)]">
+    <div className="min-h-screen overflow-hidden bg-[linear-gradient(115deg,#041955_0%,#072a82_30%,#0f42b0_64%,#2d7fff_100%)]">
       <div className="relative mx-auto flex min-h-screen max-w-[1600px] flex-col px-4 py-4 lg:px-6 lg:py-5">
-        <div className="absolute inset-x-0 top-0 h-full overflow-hidden pointer-events-none">
-          <svg className="absolute right-0 top-0 h-[78%] w-[62%] opacity-55" viewBox="0 0 800 620" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M510 60L730 0L790 130L648 154L585 124L510 60Z" stroke="#8bb8de" strokeWidth="2" />
-            <path d="M431 221L560 123L664 156L700 293L598 386L448 341L431 221Z" stroke="#81b9e5" strokeWidth="2" />
-            <path d="M269 475L390 373L448 341L598 386L676 470L598 546L426 555L269 475Z" stroke="#7db7e2" strokeWidth="2" />
-            <path d="M50 602L211 467L269 475L426 555L278 620H50V602Z" stroke="#b5d4ec" strokeWidth="2" />
-            <circle cx="730" cy="0" r="7" fill="#8bb8de" />
-            <circle cx="785" cy="131" r="7" fill="#8bb8de" />
-            <circle cx="666" cy="156" r="7" fill="#8bb8de" />
-            <circle cx="431" cy="221" r="7" fill="#8bb8de" />
-            <circle cx="598" cy="386" r="7" fill="#8bb8de" />
-            <circle cx="448" cy="341" r="7" fill="#8bb8de" />
-            <circle cx="426" cy="555" r="7" fill="#8bb8de" />
-          </svg>
-          <div className="absolute -left-10 top-36 h-52 w-52 rounded-full border-[10px] border-[#c6dff2] opacity-45" />
-          <div className="absolute left-4 top-44 h-10 w-20 rotate-[-38deg] rounded-full border-[4px] border-[#c6dff2] opacity-70" />
-          <div className="absolute bottom-16 left-24 h-32 w-32 rounded-full border-[9px] border-[#d8e7f5] opacity-40" />
-        </div>
+        <BackgroundRays />
 
-        <div className="relative grid flex-1 gap-6 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-center lg:gap-8">
+        <div className="relative grid flex-1 gap-6 lg:grid-cols-[minmax(0,1fr)_430px] lg:items-center lg:gap-10">
           <section className="flex min-h-0 flex-col justify-between py-2 lg:py-4">
-            <div className="max-w-[760px]">
-              <BridgeWordmark />
+            <div className="max-w-[740px]">
+              <HeroWordmark />
 
-              <div className="mt-8 lg:mt-10">
-                <h1 className="text-[42px] font-bold leading-[1.05] tracking-tight text-[#082c63] lg:text-[60px]">
-                  Conectamos a las personas.
-                  <span className="mt-1 block text-[#ff5c4d]">Impulsamos soluciones.</span>
-                </h1>
-
-                <p className="mt-5 max-w-[700px] text-[18px] leading-[1.45] text-slate-700 lg:text-[21px]">
-                  Bridge es la plataforma que conecta a nuestros clientes estrategicos con los equipos, servicios y
-                  soluciones de Macmillan Education, ofreciendo una experiencia unificada, agil y orientada al valor.
-                </p>
-              </div>
+              <p className="mt-10 max-w-[640px] text-[22px] leading-[1.55] text-white/92 sm:text-[24px] lg:text-[26px]">
+                Bridge te conecta con los equipos, servicios y soluciones de Macmillan Education, ofreciendo una experiencia unificada, agil y orientada al valor.
+              </p>
             </div>
 
-            <div className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
-              {featureItems.map(({ icon: Icon, title, description, accent }) => (
+            <div className="mt-10 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5 xl:gap-0">
+              {featureItems.map(({ icon: Icon, title, description, glow }) => (
                 <div
                   key={title}
-                  className={[
-                    "rounded-[20px] border px-4 py-4 shadow-[0_10px_30px_-20px_rgba(15,23,42,0.35)]",
-                    accent
-                      ? "border-sky-200 bg-[linear-gradient(180deg,_rgba(241,249,255,0.96),_rgba(215,239,255,0.9))]"
-                      : "border-slate-200 bg-white/92",
-                  ].join(" ")}
+                  className="flex flex-col items-center rounded-[22px] border border-white/12 bg-white/5 px-3 py-4 text-center backdrop-blur-[1px] xl:rounded-none xl:border-0 xl:bg-transparent xl:px-4 xl:py-0 xl:last:border-r-0"
                 >
-                  <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-[#082c63] shadow-sm">
-                    <Icon className="h-5 w-5" strokeWidth={1.9} />
+                  <div
+                    className={[
+                      "mb-4 flex h-16 w-16 items-center justify-center rounded-full border text-white",
+                      glow
+                        ? "border-sky-300/70 bg-sky-400/12 shadow-[0_0_0_4px_rgba(59,130,246,0.18),0_0_30px_rgba(56,189,248,0.18)]"
+                        : "border-white/30 bg-white/7",
+                    ].join(" ")}
+                  >
+                    <Icon className="h-7 w-7" strokeWidth={1.8} />
                   </div>
-                  <h3 className="whitespace-pre-line text-[16px] font-semibold leading-[1.15] text-[#082c63] lg:text-[17px]">
+                  <h3 className="whitespace-pre-line text-[18px] font-semibold leading-[1.12] text-white lg:text-[20px]">
                     {title}
                   </h3>
-                  <p className="mt-2 whitespace-pre-line text-[13px] leading-[1.45] text-slate-700 lg:text-[14px]">
+                  <p className="mt-2 whitespace-pre-line text-[13px] leading-[1.45] text-white/78 lg:text-[14px]">
                     {description}
                   </p>
                 </div>
@@ -241,9 +235,9 @@ export default function MacmillanLogin() {
           </section>
 
           <aside className="flex items-center justify-center">
-            <div className="w-full rounded-[26px] border border-slate-200/80 bg-white/95 p-7 shadow-[0_20px_60px_-30px_rgba(15,23,42,0.35)] lg:p-8">
+            <div className="w-full rounded-[28px] border border-white/75 bg-white/98 p-7 shadow-[0_28px_80px_-36px_rgba(4,10,31,0.72)] lg:p-8">
               <div className="text-center">
-                <h2 className="text-[44px] font-bold tracking-tight text-[#082c63] lg:text-[56px]">Bienvenido</h2>
+                <h2 className="text-[42px] font-bold tracking-tight text-[#082c63] lg:text-[56px]">Bienvenido</h2>
                 <p className="mt-2 text-[16px] text-slate-600 lg:text-[18px]">Inicia sesion para continuar</p>
               </div>
 
@@ -260,7 +254,7 @@ export default function MacmillanLogin() {
                     name="email"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-[15px] font-semibold text-[#082c63]">Correo Electronico</FormLabel>
+                        <FormLabel className="text-[15px] font-semibold text-[#082c63]">Correo electronico</FormLabel>
                         <FormControl>
                           <div className="relative">
                             <Mail className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
@@ -289,10 +283,6 @@ export default function MacmillanLogin() {
                               type="password"
                               placeholder="••••••••••"
                               {...field}
-                              ref={(element) => {
-                                field.ref(element);
-                                passwordInputRef.current = element;
-                              }}
                               className="h-12 rounded-xl border-slate-200 pl-12 pr-12 text-[16px] text-slate-700 placeholder:text-slate-400"
                             />
                             <Eye className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
@@ -364,6 +354,12 @@ export default function MacmillanLogin() {
                     )}
                   </Button>
 
+                  <div className="flex items-center gap-3 pt-1">
+                    <div className="h-px flex-1 bg-slate-200" />
+                    <span className="text-xs text-slate-400">o</span>
+                    <div className="h-px flex-1 bg-slate-200" />
+                  </div>
+
                   <p className="pt-2 text-center text-[14px] leading-6 text-slate-700">
                     Necesitas ayuda? Contacta con el <span className="font-medium text-[#2563eb]">equipo de soporte</span>
                   </p>
@@ -373,14 +369,14 @@ export default function MacmillanLogin() {
           </aside>
         </div>
 
-        <footer className="relative mt-4 rounded-[18px] bg-[#082c63] px-5 py-4 text-white">
+        <footer className="relative mt-4 rounded-[18px] bg-[#07245d]/92 px-5 py-4 text-white backdrop-blur-sm">
           <div className="flex flex-col items-center justify-between gap-3 text-center text-[14px] lg:flex-row lg:text-left lg:text-[15px]">
             <div className="flex items-center gap-3">
               <img src={meeLogo} alt="Macmillan Education" className="h-7 w-auto brightness-0 invert" />
               <span className="font-medium">macmillan education</span>
             </div>
             <span className="font-medium">bridge.macmillan.es</span>
-            <span>© 2024 Macmillan Education. Todos los derechos reservados.</span>
+            <span>&copy; 2024 Macmillan Education. Todos los derechos reservados.</span>
           </div>
         </footer>
       </div>
