@@ -514,7 +514,7 @@ router.post("/external", externalIntegrationRateLimit, async (req, res) => {
       error: "InternalServerError",
       message: "No se pudo procesar la solicitud.",
     });
-  });
+  }
 });
 
 export default router;
