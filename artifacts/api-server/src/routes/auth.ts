@@ -218,6 +218,91 @@ async function resolveSupportContactScope(email: string) {
   return null;
 }
 
+async function createLoginAccessTicket(input: {
+  email: string;
+  subject: string;
+  message: string;
+  requesterName?: string | null;
+  requesterPhone?: string | null;
+  requesterSchoolName?: string | null;
+  source: "login_support_contact" | "forgot_password";
+  category: "contacto_soporte_login" | "recuperacion_contrasena_login";
+  ip: string;
+}) {
+  const scope = await resolveSupportContactScope(input.email);
+  if (!scope?.tenantId) {
+    logger.error(
+      { requesterEmail: input.email.toLowerCase(), source: input.source, ip: input.ip },
+      "Login access ticket scope could not be resolved",
+    );
+    return null;
+  }
+
+  const ticketNumber = generateTicketNumber();
+  const description = [
+    input.source === "forgot_password"
+      ? "Solicitud de recuperacion de contrasena creada desde la pantalla de acceso de Bridge."
+      : "Solicitud creada desde la pantalla de acceso de Bridge.",
+    "",
+    `Nombre: ${input.requesterName || "-"}`,
+    `Email: ${input.email.toLowerCase()}`,
+    `Telefono: ${input.requesterPhone || "-"}`,
+    `Colegio o centro: ${input.requesterSchoolName || "-"}`,
+    "",
+    "Mensaje:",
+    input.message,
+  ].join("\n");
+
+  await db.insert(ticketsTable).values({
+    ticketNumber,
+    title: `[Acceso] ${input.subject}`,
+    description,
+    status: "nuevo",
+    priority: "media",
+    category: input.category,
+    tenantId: scope.tenantId,
+    schoolId: scope.schoolId ?? null,
+    createdById: scope.createdById,
+    customFields: JSON.stringify({
+      source: input.source,
+      requesterName: input.requesterName || null,
+      requesterEmail: input.email.toLowerCase(),
+      requesterPhone: input.requesterPhone || null,
+      requesterSchoolName: input.requesterSchoolName || null,
+      submittedAt: new Date().toISOString(),
+    }),
+  } as any);
+
+  const createdTickets = await db
+    .select({ id: ticketsTable.id })
+    .from(ticketsTable)
+    .where(eq(ticketsTable.ticketNumber, ticketNumber))
+    .limit(1);
+
+  const createdTicket = createdTickets[0];
+  if (createdTicket) {
+    await createAuditLog({
+      action: "create",
+      entityType: "ticket",
+      entityId: createdTicket.id,
+      userId: scope.createdById,
+      tenantId: scope.tenantId,
+      newValues: {
+        source: input.source,
+        requesterEmail: input.email.toLowerCase(),
+        requesterName: input.requesterName || null,
+      },
+    });
+  }
+
+  logger.info(
+    { requesterEmail: input.email.toLowerCase(), ticketNumber, tenantId: scope.tenantId, source: input.source, ip: input.ip },
+    "Login access ticket created",
+  );
+
+  return { ticketNumber };
+}
+
 async function auditLoginSecurityEvent(params: {
   action: string;
   user?: typeof usersTable.$inferSelect;
@@ -512,42 +597,32 @@ router.post("/change-password", requireAuth, async (req, res) => {
 router.post("/forgot-password", async (req, res) => {
   const parsed = forgotPasswordSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(200).json({ message: "Si el correo existe, se enviaran instrucciones para restablecer la contrasena." });
+    res.status(400).json({ error: "ValidationError", message: "Revisa el correo indicado." });
     return;
   }
 
   const email = parsed.data.email.toLowerCase();
-  const users = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
-  const user = users[0];
 
-  if (user?.active) {
-    const token = crypto.randomBytes(32).toString("base64url");
-    const expiresAt = new Date(Date.now() + RESET_PASSWORD_EXPIRES_MINUTES * 60 * 1000);
-
-    await db
-      .update(usersTable)
-      .set({
-        resetPasswordTokenHash: hashResetToken(token),
-        resetPasswordExpiresAt: expiresAt,
-        updatedAt: new Date(),
-      })
-      .where(eq(usersTable.id, user.id));
-
-    await createAuditLog({
-      action: "password_reset_requested",
-      entityType: "user",
-      entityId: user.id,
-      userId: user.id,
-      tenantId: user.tenantId,
-      newValues: { ip: getClientIp(req), expiresAt },
+  try {
+    const created = await createLoginAccessTicket({
+      email,
+      subject: "Recuperacion de contrasena",
+      message: "El usuario solicita ayuda para recuperar su contrasena de acceso a Bridge.",
+      source: "forgot_password",
+      category: "recuperacion_contrasena_login",
+      ip: getClientIp(req),
     });
 
-    logger.info({ email, resetUrl: buildResetPasswordUrl(req, token) }, "Password reset link generated");
-  } else {
-    logger.warn({ email, ip: getClientIp(req) }, "Password reset requested for unknown or inactive user");
-  }
+    if (!created) {
+      res.status(503).json({ error: "SupportNotConfigured", message: "El servicio de soporte no esta disponible ahora mismo." });
+      return;
+    }
 
-  res.json({ message: "Si el correo existe, se enviaran instrucciones para restablecer la contrasena." });
+    res.json({ message: `Tu solicitud se ha registrado correctamente con el numero ${created.ticketNumber}.`, ticketNumber: created.ticketNumber });
+  } catch (error) {
+    logger.error({ err: error, email, ip: getClientIp(req) }, "Forgot password ticket creation failed");
+    res.status(500).json({ error: "InternalServerError", message: "No se pudo registrar tu solicitud en este momento." });
+  }
 });
 
 router.post("/support-contact", async (req, res) => {
@@ -567,67 +642,24 @@ router.post("/support-contact", async (req, res) => {
   }
 
   try {
-    const ticketNumber = generateTicketNumber();
-    const description = [
-      "Solicitud creada desde la pantalla de acceso de Bridge.",
-      "",
-      `Nombre: ${parsed.data.name}`,
-      `Email: ${parsed.data.email.toLowerCase()}`,
-      `Telefono: ${parsed.data.phone || "-"}`,
-      `Colegio o centro: ${parsed.data.schoolName || "-"}`,
-      "",
-      "Mensaje:",
-      parsed.data.message,
-    ].join("\n");
-
-    await db.insert(ticketsTable).values({
-      ticketNumber,
-      title: `[Acceso] ${parsed.data.subject}`,
-      description,
-      status: "nuevo",
-      priority: "media",
+    const created = await createLoginAccessTicket({
+      email: parsed.data.email.toLowerCase(),
+      subject: parsed.data.subject,
+      message: parsed.data.message,
+      requesterName: parsed.data.name,
+      requesterPhone: parsed.data.phone || null,
+      requesterSchoolName: parsed.data.schoolName || null,
+      source: "login_support_contact",
       category: "contacto_soporte_login",
-      tenantId: scope.tenantId,
-      schoolId: scope.schoolId ?? null,
-      createdById: scope.createdById,
-      customFields: JSON.stringify({
-        source: "login_support_contact",
-        requesterName: parsed.data.name,
-        requesterEmail: parsed.data.email.toLowerCase(),
-        requesterPhone: parsed.data.phone || null,
-        requesterSchoolName: parsed.data.schoolName || null,
-        submittedAt: new Date().toISOString(),
-      }),
-    } as any);
+      ip: getClientIp(req),
+    });
 
-    const createdTickets = await db
-      .select({ id: ticketsTable.id })
-      .from(ticketsTable)
-      .where(eq(ticketsTable.ticketNumber, ticketNumber))
-      .limit(1);
-
-    const createdTicket = createdTickets[0];
-    if (createdTicket) {
-      await createAuditLog({
-        action: "create",
-        entityType: "ticket",
-        entityId: createdTicket.id,
-        userId: scope.createdById,
-        tenantId: scope.tenantId,
-        newValues: {
-          source: "login_support_contact",
-          requesterEmail: parsed.data.email.toLowerCase(),
-          requesterName: parsed.data.name,
-        },
-      });
+    if (!created) {
+      res.status(503).json({ error: "SupportNotConfigured", message: "El servicio de soporte no esta disponible ahora mismo." });
+      return;
     }
 
-    logger.info(
-      { requesterEmail: parsed.data.email.toLowerCase(), ticketNumber, tenantId: scope.tenantId, ip: getClientIp(req) },
-      "Support contact ticket created",
-    );
-
-    res.json({ message: `Tu solicitud se ha registrado correctamente con el numero ${ticketNumber}.`, ticketNumber });
+    res.json({ message: `Tu solicitud se ha registrado correctamente con el numero ${created.ticketNumber}.`, ticketNumber: created.ticketNumber });
   } catch (error) {
     logger.error(
       { err: error, requesterEmail: parsed.data.email.toLowerCase(), ip: getClientIp(req) },

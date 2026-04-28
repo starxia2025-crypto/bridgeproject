@@ -26,19 +26,20 @@ export default function ForgotPassword() {
   async function onSubmit(values: ForgotPasswordValues) {
     setIsSending(true);
     try {
-      await customFetch("/api/auth/forgot-password", {
+      const response = await customFetch<{ message: string }>("/api/auth/forgot-password", {
         method: "POST",
         body: JSON.stringify({ email: values.email.trim().toLowerCase() }),
       });
 
       toast({
-        title: "Solicitud recibida",
-        description: "Si el correo existe, se enviaran instrucciones para restablecer la contrasena.",
+        title: "Solicitud registrada",
+        description: response.message,
       });
-    } catch {
+    } catch (error) {
       toast({
-        title: "Solicitud recibida",
-        description: "Si el correo existe, se enviaran instrucciones para restablecer la contrasena.",
+        title: "No se pudo registrar la solicitud",
+        description: error instanceof Error ? error.message : "Intentalo de nuevo en unos minutos.",
+        variant: "destructive",
       });
     } finally {
       setIsSending(false);
@@ -50,7 +51,7 @@ export default function ForgotPassword() {
       <Card className="w-full max-w-md shadow-sm">
         <CardHeader>
           <h1 className="text-2xl font-bold text-slate-900">Recuperar contrasena</h1>
-          <p className="text-sm text-slate-500">Indica tu correo y te enviaremos instrucciones si existe una cuenta activa.</p>
+          <p className="text-sm text-slate-500">Indica tu correo y registraremos una solicitud para que soporte gestione el acceso.</p>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -70,7 +71,7 @@ export default function ForgotPassword() {
               />
 
               <Button type="submit" className="w-full" disabled={isSending}>
-                {isSending ? "Enviando..." : "Enviar instrucciones"}
+                {isSending ? "Registrando..." : "Registrar solicitud"}
               </Button>
               <Link href="/">
                 <span className="block cursor-pointer text-center text-sm font-medium text-primary hover:underline">
