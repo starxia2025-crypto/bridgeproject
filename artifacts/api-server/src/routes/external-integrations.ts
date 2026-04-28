@@ -1,15 +1,18 @@
 import crypto from "node:crypto";
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
 import { and, eq, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@workspace/db";
 import { schoolsTable, tenantsTable, ticketsTable, usersTable } from "@workspace/db/schema";
 import { createAuditLog } from "../lib/audit.js";
 import { stringifyDbJson } from "../lib/db-json.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
 const externalIntegrationTypeEnum = ["email_change", "cancellation"] as const;
+const DEFAULT_RATE_LIMIT_MAX_PER_MINUTE = 30;
 
 const basePayloadSchema = z.object({
   externalId: z.string().trim().min(1),
@@ -20,17 +23,17 @@ const basePayloadSchema = z.object({
   title: z.string().trim().min(3),
   description: z.string().trim().min(10),
   reason: z.string().trim().min(1),
-});
+}).strict();
 
 const emailChangePayloadSchema = basePayloadSchema.extend({
   type: z.literal("email_change"),
   newEmail: z.string().trim().email(),
-});
+}).strict();
 
 const cancellationPayloadSchema = basePayloadSchema.extend({
   type: z.literal("cancellation"),
   isbn: z.string().trim().min(1),
-});
+}).strict();
 
 const externalPayloadSchema = z.discriminatedUnion("type", [
   emailChangePayloadSchema,
@@ -38,6 +41,25 @@ const externalPayloadSchema = z.discriminatedUnion("type", [
 ]);
 
 type ExternalPayload = z.infer<typeof externalPayloadSchema>;
+type ExternalClientConfig = {
+  clientId: string;
+  apiKey: string;
+  tenantId: number;
+  schoolId: number | null;
+  fallbackUserId: number | null;
+  fallbackUserEmail: string | null;
+};
+
+const externalClientSchema = z.object({
+  clientId: z.string().trim().min(1),
+  apiKey: z.string().trim().min(1),
+  tenantId: z.number().int().positive(),
+  schoolId: z.number().int().positive().nullable().optional(),
+  fallbackUserId: z.number().int().positive().nullable().optional(),
+  fallbackUserEmail: z.string().trim().email().nullable().optional(),
+}).strict();
+
+const externalClientsSchema = z.array(externalClientSchema).min(1);
 
 function generateTicketNumber() {
   const timestamp = Date.now().toString(36).toUpperCase();
@@ -45,16 +67,70 @@ function generateTicketNumber() {
   return `TKT-${timestamp}-${random}`;
 }
 
-function getConfiguredTenantId() {
-  const rawValue = process.env["EXTERNAL_INTEGRATION_TENANT_ID"];
+function parsePositiveInteger(rawValue: string | undefined) {
   const parsedValue = rawValue ? Number(rawValue) : Number.NaN;
   return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : null;
 }
 
-function getConfiguredSchoolId() {
-  const rawValue = process.env["EXTERNAL_INTEGRATION_SCHOOL_ID"];
-  const parsedValue = rawValue ? Number(rawValue) : Number.NaN;
-  return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : null;
+function getExternalClientId(requestClientId: string | undefined) {
+  return requestClientId?.trim() || null;
+}
+
+function safeCompare(secretA: string, secretB: string) {
+  const left = Buffer.from(secretA);
+  const right = Buffer.from(secretB);
+  if (left.length !== right.length) return false;
+  return crypto.timingSafeEqual(left, right);
+}
+
+function parseExternalClientsFromJson() {
+  const rawValue = process.env["EXTERNAL_INTEGRATION_CLIENTS_JSON"]?.trim();
+  if (!rawValue) return [];
+
+  const parsedValue = JSON.parse(rawValue) as unknown;
+  return externalClientsSchema.parse(parsedValue).map((client) => ({
+    clientId: client.clientId.trim(),
+    apiKey: client.apiKey.trim(),
+    tenantId: client.tenantId,
+    schoolId: client.schoolId ?? null,
+    fallbackUserId: client.fallbackUserId ?? null,
+    fallbackUserEmail: client.fallbackUserEmail?.trim().toLowerCase() ?? null,
+  }));
+}
+
+function getLegacyExternalClientConfig() {
+  const apiKey = process.env["EXTERNAL_INTEGRATION_API_KEY"]?.trim();
+  const tenantId = parsePositiveInteger(process.env["EXTERNAL_INTEGRATION_TENANT_ID"]);
+  if (!apiKey || !tenantId) return null;
+
+  return {
+    clientId: process.env["EXTERNAL_INTEGRATION_CLIENT_ID"]?.trim() || "default",
+    apiKey,
+    tenantId,
+    schoolId: parsePositiveInteger(process.env["EXTERNAL_INTEGRATION_SCHOOL_ID"]),
+    fallbackUserId: parsePositiveInteger(process.env["EXTERNAL_INTEGRATION_FALLBACK_USER_ID"]),
+    fallbackUserEmail: process.env["EXTERNAL_INTEGRATION_FALLBACK_USER_EMAIL"]?.trim().toLowerCase() || null,
+  } satisfies ExternalClientConfig;
+}
+
+function getConfiguredExternalClients() {
+  const jsonClients = parseExternalClientsFromJson();
+  if (jsonClients.length > 0) {
+    return jsonClients;
+  }
+
+  const legacyClient = getLegacyExternalClientConfig();
+  return legacyClient ? [legacyClient] : [];
+}
+
+function resolveExternalClient(clientId: string | null) {
+  if (!clientId) return null;
+  return getConfiguredExternalClients().find((client) => client.clientId === clientId) ?? null;
+}
+
+function getExternalRateLimitMaxPerMinute() {
+  const parsedValue = parsePositiveInteger(process.env["EXTERNAL_INTEGRATION_RATE_LIMIT_MAX_PER_MINUTE"]);
+  return parsedValue ?? DEFAULT_RATE_LIMIT_MAX_PER_MINUTE;
 }
 
 async function validateConfiguredTargets(tenantId: number, schoolId: number | null) {
@@ -125,10 +201,11 @@ function buildTicketCategory(type: ExternalPayload["type"]) {
   return type === "email_change" ? "modificar_correo" : "devolucion_cancelacion";
 }
 
-function buildCustomFields(payload: ExternalPayload) {
+function buildCustomFields(payload: ExternalPayload, clientId: string) {
   const commonFields = {
     source: "external_integration",
     externalIntegration: {
+      clientId,
       externalId: payload.externalId,
       type: payload.type,
       reporterEmail: payload.reporterEmail,
@@ -158,7 +235,7 @@ function buildCustomFields(payload: ExternalPayload) {
   };
 }
 
-async function findDuplicateTicket(externalId: string) {
+async function findDuplicateTicket(clientId: string, externalId: string) {
   const safeCustomFields = sql`CASE WHEN JSON_VALID(${ticketsTable.customFields}) THEN ${ticketsTable.customFields} ELSE NULL END`;
 
   const duplicateTickets = await db
@@ -170,6 +247,7 @@ async function findDuplicateTicket(externalId: string) {
     .where(
       and(
         sql`JSON_UNQUOTE(JSON_EXTRACT(${safeCustomFields}, '$.source')) = 'external_integration'`,
+        sql`JSON_UNQUOTE(JSON_EXTRACT(${safeCustomFields}, '$.externalIntegration.clientId')) = ${clientId}`,
         sql`JSON_UNQUOTE(JSON_EXTRACT(${safeCustomFields}, '$.externalIntegration.externalId')) = ${externalId}`,
       ),
     )
@@ -178,7 +256,7 @@ async function findDuplicateTicket(externalId: string) {
   return duplicateTickets[0] ?? null;
 }
 
-async function resolveCreatedById(reporterEmail: string) {
+async function resolveCreatedById(reporterEmail: string, clientConfig: ExternalClientConfig) {
   const normalizedEmail = reporterEmail.toLowerCase();
   const matchingUsers = await db
     .select({ id: usersTable.id })
@@ -190,13 +268,11 @@ async function resolveCreatedById(reporterEmail: string) {
     return matchingUsers[0].id;
   }
 
-  const fallbackUserId = process.env["EXTERNAL_INTEGRATION_FALLBACK_USER_ID"];
-  const parsedFallbackUserId = fallbackUserId ? Number(fallbackUserId) : Number.NaN;
-  if (Number.isInteger(parsedFallbackUserId) && parsedFallbackUserId > 0) {
-    return parsedFallbackUserId;
+  if (clientConfig.fallbackUserId) {
+    return clientConfig.fallbackUserId;
   }
 
-  const fallbackUserEmail = process.env["EXTERNAL_INTEGRATION_FALLBACK_USER_EMAIL"]?.trim().toLowerCase();
+  const fallbackUserEmail = clientConfig.fallbackUserEmail;
   if (fallbackUserEmail) {
     const fallbackUsers = await db
       .select({ id: usersTable.id })
@@ -223,141 +299,221 @@ async function resolveCreatedById(reporterEmail: string) {
   return technicalUsers[0]?.id ?? null;
 }
 
-function isValidApiKey(requestApiKey: string | undefined) {
-  const configuredApiKey = process.env["EXTERNAL_INTEGRATION_API_KEY"]?.trim();
-  if (!configuredApiKey) {
+function isValidApiKey(requestApiKey: string | undefined, configuredApiKey: string) {
+  if (!requestApiKey?.trim()) {
     return false;
   }
 
-  return requestApiKey === configuredApiKey;
+  return safeCompare(requestApiKey.trim(), configuredApiKey);
 }
 
-router.post("/external", async (req, res) => {
-  if (!process.env["EXTERNAL_INTEGRATION_API_KEY"]?.trim()) {
-    res.status(503).json({
+const externalIntegrationRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: getExternalRateLimitMaxPerMinute(),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator(req) {
+    return `${req.ip}:${req.header("x-client-id")?.trim() || "unknown"}`;
+  },
+  handler(req, res) {
+    logger.warn({
+      action: "external_integration_rate_limited",
+      clientId: req.header("x-client-id")?.trim() || null,
+      ip: req.ip,
+    }, "External integration rate limit exceeded");
+    res.status(429).json({
       ok: false,
-      error: "ConfigurationError",
-      message: "Falta configurar EXTERNAL_INTEGRATION_API_KEY.",
+      error: "TooManyRequests",
+      message: "Demasiadas solicitudes. Intentalo de nuevo mas tarde.",
     });
-    return;
-  }
+  },
+});
 
-  if (!isValidApiKey(req.header("x-api-key") ?? undefined)) {
-    res.status(401).json({
-      ok: false,
-      error: "Unauthorized",
-      message: "API key no valida.",
+router.post("/external", externalIntegrationRateLimit, async (req, res) => {
+  const clientId = getExternalClientId(req.header("x-client-id") ?? undefined);
+  const requestApiKey = req.header("x-api-key") ?? undefined;
+
+  try {
+    const configuredClients = getConfiguredExternalClients();
+    if (configuredClients.length === 0) {
+      logger.error({
+        action: "external_integration_configuration_error",
+        clientId,
+        ip: req.ip,
+      }, "External integration is not configured");
+      res.status(503).json({
+        ok: false,
+        error: "ConfigurationError",
+        message: "Servicio temporalmente no disponible.",
+      });
+      return;
+    }
+
+    const clientConfig = resolveExternalClient(clientId);
+    if (!clientConfig || !isValidApiKey(requestApiKey, clientConfig.apiKey)) {
+      logger.warn({
+        action: "external_integration_auth_failed",
+        clientId,
+        ip: req.ip,
+      }, "External integration authentication failed");
+      res.status(401).json({
+        ok: false,
+        error: "Unauthorized",
+        message: "No autorizado.",
+      });
+      return;
+    }
+
+    const parsedPayload = externalPayloadSchema.safeParse(req.body);
+    if (!parsedPayload.success) {
+      logger.warn({
+        action: "external_integration_validation_failed",
+        clientId: clientConfig.clientId,
+        ip: req.ip,
+      }, "External integration payload validation failed");
+      res.status(400).json({
+        ok: false,
+        error: "ValidationError",
+        message: "Payload no valido.",
+        details: parsedPayload.error.flatten(),
+      });
+      return;
+    }
+
+    const tenantId = clientConfig.tenantId;
+    const schoolId = clientConfig.schoolId;
+
+    const targetValidation = await validateConfiguredTargets(tenantId, schoolId);
+    if (!targetValidation.ok) {
+      logger.error({
+        action: "external_integration_configuration_error",
+        clientId: clientConfig.clientId,
+        ip: req.ip,
+      }, targetValidation.message);
+      res.status(503).json({
+        ok: false,
+        error: "ConfigurationError",
+        message: "Servicio temporalmente no disponible.",
+      });
+      return;
+    }
+
+    const duplicateTicket = await findDuplicateTicket(clientConfig.clientId, parsedPayload.data.externalId);
+    if (duplicateTicket) {
+      logger.info({
+        action: "external_integration_duplicate",
+        clientId: clientConfig.clientId,
+        externalId: parsedPayload.data.externalId,
+        ticketId: duplicateTicket.id,
+        ip: req.ip,
+      }, "External integration duplicate request");
+      res.status(200).json({
+        ok: true,
+        ticketId: duplicateTicket.id,
+        ticketNumber: duplicateTicket.ticketNumber,
+        duplicate: true,
+      });
+      return;
+    }
+
+    const createdById = await resolveCreatedById(parsedPayload.data.reporterEmail, clientConfig);
+    if (!createdById) {
+      logger.error({
+        action: "external_integration_configuration_error",
+        clientId: clientConfig.clientId,
+        ip: req.ip,
+      }, "No se pudo resolver un usuario creador para la integracion externa.");
+      res.status(503).json({
+        ok: false,
+        error: "ConfigurationError",
+        message: "Servicio temporalmente no disponible.",
+      });
+      return;
+    }
+
+    const ticketNumber = generateTicketNumber();
+    const customFields = buildCustomFields(parsedPayload.data, clientConfig.clientId);
+
+    await db.insert(ticketsTable).values({
+      ticketNumber,
+      title: parsedPayload.data.title,
+      description: parsedPayload.data.description,
+      status: "nuevo",
+      priority: "media",
+      category: buildTicketCategory(parsedPayload.data.type),
+      tenantId,
+      schoolId,
+      createdById,
+      customFields: stringifyDbJson(customFields),
+    } as any);
+
+    const createdTickets = await db
+      .select({
+        id: ticketsTable.id,
+        ticketNumber: ticketsTable.ticketNumber,
+      })
+      .from(ticketsTable)
+      .where(eq(ticketsTable.ticketNumber, ticketNumber))
+      .limit(1);
+
+    const createdTicket = createdTickets[0];
+    if (!createdTicket) {
+      logger.error({
+        action: "external_integration_create_failed",
+        clientId: clientConfig.clientId,
+        externalId: parsedPayload.data.externalId,
+        ip: req.ip,
+      }, "External integration ticket could not be reloaded after insert");
+      res.status(500).json({
+        ok: false,
+        error: "InternalServerError",
+        message: "No se pudo procesar la solicitud.",
+      });
+      return;
+    }
+
+    await createAuditLog({
+      action: "external_integration_create",
+      entityType: "ticket",
+      entityId: createdTicket.id,
+      userId: createdById,
+      tenantId,
+      newValues: {
+        clientId: clientConfig.clientId,
+        externalId: parsedPayload.data.externalId,
+        type: parsedPayload.data.type,
+        reporterEmail: parsedPayload.data.reporterEmail,
+        orderId: parsedPayload.data.orderId,
+      },
     });
-    return;
-  }
 
-  const parsedPayload = externalPayloadSchema.safeParse(req.body);
-  if (!parsedPayload.success) {
-    res.status(400).json({
-      ok: false,
-      error: "ValidationError",
-      message: "Payload no valido.",
-      details: parsedPayload.error.flatten(),
-    });
-    return;
-  }
+    logger.info({
+      action: "external_integration_created",
+      clientId: clientConfig.clientId,
+      externalId: parsedPayload.data.externalId,
+      ticketId: createdTicket.id,
+      ticketNumber: createdTicket.ticketNumber,
+      ip: req.ip,
+    }, "External integration ticket created");
 
-  const tenantId = getConfiguredTenantId();
-  const schoolId = getConfiguredSchoolId();
-  if (!tenantId) {
-    res.status(503).json({
-      ok: false,
-      error: "ConfigurationError",
-      message: "Falta configurar EXTERNAL_INTEGRATION_TENANT_ID.",
-    });
-    return;
-  }
-
-  const targetValidation = await validateConfiguredTargets(tenantId, schoolId);
-  if (!targetValidation.ok) {
-    res.status(503).json({
-      ok: false,
-      error: "ConfigurationError",
-      message: targetValidation.message,
-    });
-    return;
-  }
-
-  const duplicateTicket = await findDuplicateTicket(parsedPayload.data.externalId);
-  if (duplicateTicket) {
-    res.status(200).json({
+    res.status(201).json({
       ok: true,
-      ticketId: duplicateTicket.id,
-      ticketNumber: duplicateTicket.ticketNumber,
-      duplicate: true,
+      ticketId: createdTicket.id,
+      ticketNumber: createdTicket.ticketNumber,
+      duplicate: false,
     });
-    return;
-  }
-
-  const createdById = await resolveCreatedById(parsedPayload.data.reporterEmail);
-  if (!createdById) {
-    res.status(503).json({
-      ok: false,
-      error: "ConfigurationError",
-      message: "No se pudo resolver un usuario creador para la integracion externa.",
-    });
-    return;
-  }
-
-  const ticketNumber = generateTicketNumber();
-  const customFields = buildCustomFields(parsedPayload.data);
-
-  await db.insert(ticketsTable).values({
-    ticketNumber,
-    title: parsedPayload.data.title,
-    description: parsedPayload.data.description,
-    status: "nuevo",
-    priority: "media",
-    category: buildTicketCategory(parsedPayload.data.type),
-    tenantId,
-    schoolId,
-    createdById,
-    customFields: stringifyDbJson(customFields),
-  } as any);
-
-  const createdTickets = await db
-    .select({
-      id: ticketsTable.id,
-      ticketNumber: ticketsTable.ticketNumber,
-    })
-    .from(ticketsTable)
-    .where(eq(ticketsTable.ticketNumber, ticketNumber))
-    .limit(1);
-
-  const createdTicket = createdTickets[0];
-  if (!createdTicket) {
+  } catch (error) {
+    logger.error({
+      action: "external_integration_internal_error",
+      clientId,
+      ip: req.ip,
+      errorMessage: error instanceof Error ? error.message : "Unknown error",
+    }, "External integration request failed");
     res.status(500).json({
       ok: false,
       error: "InternalServerError",
-      message: "El ticket se creo pero no se pudo recuperar.",
+      message: "No se pudo procesar la solicitud.",
     });
-    return;
-  }
-
-  await createAuditLog({
-    action: "external_integration_create",
-    entityType: "ticket",
-    entityId: createdTicket.id,
-    userId: createdById,
-    tenantId,
-    newValues: {
-      externalId: parsedPayload.data.externalId,
-      type: parsedPayload.data.type,
-      reporterEmail: parsedPayload.data.reporterEmail,
-      orderId: parsedPayload.data.orderId,
-    },
-  });
-
-  res.status(201).json({
-    ok: true,
-    ticketId: createdTicket.id,
-    ticketNumber: createdTicket.ticketNumber,
-    duplicate: false,
   });
 });
 

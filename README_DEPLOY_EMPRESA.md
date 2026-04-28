@@ -147,11 +147,14 @@ MICROSOFT_REDIRECT_URI=https://premac.starxia.com/api/auth/microsoft/callback
 
 TICKET_RESOLVED_NOTIFY_TO=
 STATIC_DIR=
+EXTERNAL_INTEGRATION_CLIENT_ID=cliente_demo
 EXTERNAL_INTEGRATION_API_KEY=GENERAR_CLAVE_LARGA_ALEATORIA
 EXTERNAL_INTEGRATION_TENANT_ID=
 EXTERNAL_INTEGRATION_SCHOOL_ID=
 EXTERNAL_INTEGRATION_FALLBACK_USER_ID=
 EXTERNAL_INTEGRATION_FALLBACK_USER_EMAIL=
+EXTERNAL_INTEGRATION_RATE_LIMIT_MAX_PER_MINUTE=30
+EXTERNAL_INTEGRATION_CLIENTS_JSON=
 ```
 
 ### Que significa cada variable
@@ -173,9 +176,12 @@ EXTERNAL_INTEGRATION_FALLBACK_USER_EMAIL=
 - `MICROSOFT_TENANT_ID`: `common` o el tenant real
 - `MICROSOFT_REDIRECT_URI`: callback configurada en Azure
 - `EXTERNAL_INTEGRATION_API_KEY`: clave obligatoria para autenticar el servicio externo que envia tickets
+- `EXTERNAL_INTEGRATION_CLIENT_ID`: identificador del cliente externo que debe viajar en la cabecera `x-client-id`
 - `EXTERNAL_INTEGRATION_TENANT_ID`: tenant destino donde se crearan esos tickets
 - `EXTERNAL_INTEGRATION_SCHOOL_ID`: colegio destino opcional; si se informa, debe pertenecer al tenant configurado
 - `EXTERNAL_INTEGRATION_FALLBACK_USER_ID`: usuario tecnico o de servicio que figurara como creador si `reporterEmail` no existe
+- `EXTERNAL_INTEGRATION_RATE_LIMIT_MAX_PER_MINUTE`: limite maximo por minuto para esta integracion
+- `EXTERNAL_INTEGRATION_CLIENTS_JSON`: configuracion opcional para varios clientes; si se usa, sustituye al bloque simple de variables `EXTERNAL_INTEGRATION_*`
 
 Generar secretos:
 
@@ -193,6 +199,7 @@ POST /api/integrations/external
 
 Requisitos:
 
+- cabecera `x-client-id` con el valor de `EXTERNAL_INTEGRATION_CLIENT_ID` o del cliente configurado
 - cabecera `x-api-key` con el valor de `EXTERNAL_INTEGRATION_API_KEY`
 - `EXTERNAL_INTEGRATION_TENANT_ID` configurado
 - `EXTERNAL_INTEGRATION_FALLBACK_USER_ID` recomendado para asegurar un creador valido
@@ -202,6 +209,7 @@ Ejemplo:
 ```bash
 curl -X POST "https://premac.starxia.com/api/integrations/external" \
   -H "Content-Type: application/json" \
+  -H "x-client-id: TU_CLIENT_ID" \
   -H "x-api-key: TU_API_KEY" \
   -d '{
     "externalId": "ext-123",
