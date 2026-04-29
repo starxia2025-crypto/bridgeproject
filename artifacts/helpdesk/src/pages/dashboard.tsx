@@ -138,7 +138,7 @@ export default function Dashboard() {
     });
   }, [currentTenantData, tenantsData?.data, user?.role]);
 
-  const { data: stats, isLoading: statsLoading } = useGetDashboardStats(dashboardFilters, { query: { enabled: !!user } } as any);
+  const { data: stats, isLoading: statsLoading, isError: statsIsError, error: statsError } = useGetDashboardStats(dashboardFilters, { query: { enabled: !!user } } as any);
   const { data: timeData = [] } = useGetTicketsOverTime({ ...dashboardFilters, period: "day" }, { query: { enabled: !!user } } as any);
   const { data: activity = [] } = useGetRecentActivity({ ...dashboardFilters, limit: 6 }, { query: { enabled: !!user } } as any);
 
@@ -251,6 +251,30 @@ export default function Dashboard() {
           <div className="h-96 rounded-3xl bg-slate-200" />
           <div className="h-96 rounded-3xl bg-slate-200" />
         </div>
+      </div>
+    );
+  }
+
+  if (statsIsError) {
+    return (
+      <div className="space-y-6">
+        <section className="rounded-[2rem] border border-rose-200 bg-rose-50 p-8 shadow-sm">
+          <div className="max-w-3xl space-y-3">
+            <div className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-rose-600 shadow-sm">
+              <AlertCircle className="h-3.5 w-3.5" />
+              Estadisticas
+            </div>
+            <div>
+              <h1 className="text-3xl font-semibold tracking-tight text-slate-950">No se pudieron cargar las estadisticas</h1>
+              <p className="mt-2 max-w-2xl text-base text-slate-600">
+                El backend ha devuelto un error y por eso no mostramos datos inventados en 0.
+              </p>
+              <p className="mt-4 text-sm text-rose-700">
+                {statsError instanceof Error ? statsError.message : "Revisa el backend y vuelve a intentarlo."}
+              </p>
+            </div>
+          </div>
+        </section>
       </div>
     );
   }

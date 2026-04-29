@@ -9,7 +9,21 @@ import { logger } from "../lib/logger.js";
 const router = Router();
 
 function jsonString(path: string) {
-  return sql<string>`NULLIF(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(${ticketsTable.customFields}, ${path})), ''), 'null')`;
+  return sql<string>`NULLIF(
+    NULLIF(
+      JSON_UNQUOTE(
+        JSON_EXTRACT(
+          CASE
+            WHEN JSON_VALID(${ticketsTable.customFields}) THEN ${ticketsTable.customFields}
+            ELSE NULL
+          END,
+          ${path}
+        )
+      ),
+      ''
+    ),
+    'null'
+  )`;
 }
 
 function parseDashboardFilters(req: any) {
@@ -112,75 +126,90 @@ router.get("/stats", requireAuth, requireRole("superadmin", "admin_cliente", "ma
   const schoolLabel = buildSchoolLabelExpression();
   const scopeSummary = summarizeDashboardScope(filters, authUser);
 
-  const [
-    totalResult,
-    newResult,
-    openResult,
-    resolvedResult,
-    closedResult,
-    pendingResult,
-    urgentResult,
-    resolvedWithTimeResult,
-    schoolsResult,
-    usersResult,
-    techResult,
-  ] = await Promise.all([
-    db.select({ count: count() }).from(ticketsTable).where(where),
-    db.select({ count: count() }).from(ticketsTable).where(and(where, eq(ticketsTable.status, "nuevo"))),
-    db.select({ count: count() }).from(ticketsTable).where(and(where, sql`${ticketsTable.status} NOT IN ('resuelto', 'cerrado')`)),
-    db.select({ count: count() }).from(ticketsTable).where(and(where, eq(ticketsTable.status, "resuelto"))),
-    db.select({ count: count() }).from(ticketsTable).where(and(where, eq(ticketsTable.status, "cerrado"))),
-    db.select({ count: count() }).from(ticketsTable).where(and(where, eq(ticketsTable.status, "pendiente"))),
-    db.select({ count: count() }).from(ticketsTable).where(and(where, eq(ticketsTable.priority, "urgente"))),
-    db
-      .select({ avgHours: sql<number>`AVG(TIMESTAMPDIFF(SECOND, ${ticketsTable.createdAt}, ${ticketsTable.resolvedAt}) / 3600.0)` })
-      .from(ticketsTable)
-      .where(and(where, sql`${ticketsTable.resolvedAt} IS NOT NULL`)),
-    db
-      .select({ schoolName: schoolLabel })
-      .from(ticketsTable)
-      .leftJoin(schoolsTable, eq(ticketsTable.schoolId, schoolsTable.id))
-      .leftJoin(tenantsTable, eq(ticketsTable.tenantId, tenantsTable.id))
-      .where(where)
-      .groupBy(schoolLabel),
-    db.select({ count: count() }).from(usersTable),
-    db.select({ count: count() }).from(usersTable).where(eq(usersTable.role, "tecnico")),
-  ]);
+  try {
+    if (isDashboardDebugEnabled()) {
+      logger.info({ dashboard: scopeSummary }, "Dashboard stats request received");
+    }
 
-  const responsePayload = {
-    totalTickets: Number(totalResult[0]?.count ?? 0),
-    newTickets: Number(newResult[0]?.count ?? 0),
-    openTickets: Number(openResult[0]?.count ?? 0),
-    resolvedTickets: Number(resolvedResult[0]?.count ?? 0),
-    closedTickets: Number(closedResult[0]?.count ?? 0),
-    pendingTickets: Number(pendingResult[0]?.count ?? 0),
-    urgentTickets: Number(urgentResult[0]?.count ?? 0),
-    avgResolutionHours: resolvedWithTimeResult[0]?.avgHours ?? null,
-    totalSchools: schoolsResult.length,
-    totalUsers: Number(usersResult[0]?.count ?? 0),
-    totalTechnicians: Number(techResult[0]?.count ?? 0),
-  };
+    const [
+      totalResult,
+      newResult,
+      openResult,
+      resolvedResult,
+      closedResult,
+      pendingResult,
+      urgentResult,
+      resolvedWithTimeResult,
+      schoolsResult,
+      usersResult,
+      techResult,
+    ] = await Promise.all([
+      db.select({ count: count() }).from(ticketsTable).where(where),
+      db.select({ count: count() }).from(ticketsTable).where(and(where, eq(ticketsTable.status, "nuevo"))),
+      db.select({ count: count() }).from(ticketsTable).where(and(where, sql`${ticketsTable.status} NOT IN ('resuelto', 'cerrado')`)),
+      db.select({ count: count() }).from(ticketsTable).where(and(where, eq(ticketsTable.status, "resuelto"))),
+      db.select({ count: count() }).from(ticketsTable).where(and(where, eq(ticketsTable.status, "cerrado"))),
+      db.select({ count: count() }).from(ticketsTable).where(and(where, eq(ticketsTable.status, "pendiente"))),
+      db.select({ count: count() }).from(ticketsTable).where(and(where, eq(ticketsTable.priority, "urgente"))),
+      db
+        .select({ avgHours: sql<number>`AVG(TIMESTAMPDIFF(SECOND, ${ticketsTable.createdAt}, ${ticketsTable.resolvedAt}) / 3600.0)` })
+        .from(ticketsTable)
+        .where(and(where, sql`${ticketsTable.resolvedAt} IS NOT NULL`)),
+      db
+        .select({ schoolName: schoolLabel })
+        .from(ticketsTable)
+        .leftJoin(schoolsTable, eq(ticketsTable.schoolId, schoolsTable.id))
+        .leftJoin(tenantsTable, eq(ticketsTable.tenantId, tenantsTable.id))
+        .where(where)
+        .groupBy(schoolLabel),
+      db.select({ count: count() }).from(usersTable),
+      db.select({ count: count() }).from(usersTable).where(eq(usersTable.role, "tecnico")),
+    ]);
 
-  if (isDashboardDebugEnabled()) {
-    logger.info(
+    const responsePayload = {
+      totalTickets: Number(totalResult[0]?.count ?? 0),
+      newTickets: Number(newResult[0]?.count ?? 0),
+      openTickets: Number(openResult[0]?.count ?? 0),
+      resolvedTickets: Number(resolvedResult[0]?.count ?? 0),
+      closedTickets: Number(closedResult[0]?.count ?? 0),
+      pendingTickets: Number(pendingResult[0]?.count ?? 0),
+      urgentTickets: Number(urgentResult[0]?.count ?? 0),
+      avgResolutionHours: resolvedWithTimeResult[0]?.avgHours ?? null,
+      totalSchools: schoolsResult.length,
+      totalUsers: Number(usersResult[0]?.count ?? 0),
+      totalTechnicians: Number(techResult[0]?.count ?? 0),
+    };
+
+    if (isDashboardDebugEnabled()) {
+      logger.info(
+        {
+          dashboard: scopeSummary,
+          found: {
+            totalTickets: responsePayload.totalTickets,
+            newTickets: responsePayload.newTickets,
+            openTickets: responsePayload.openTickets,
+            resolvedTickets: responsePayload.resolvedTickets,
+            closedTickets: responsePayload.closedTickets,
+            pendingTickets: responsePayload.pendingTickets,
+            urgentTickets: responsePayload.urgentTickets,
+            totalSchools: responsePayload.totalSchools,
+          },
+        },
+        "Dashboard stats calculated",
+      );
+    }
+
+    res.json(responsePayload);
+  } catch (error) {
+    logger.error(
       {
         dashboard: scopeSummary,
-        found: {
-          totalTickets: responsePayload.totalTickets,
-          newTickets: responsePayload.newTickets,
-          openTickets: responsePayload.openTickets,
-          resolvedTickets: responsePayload.resolvedTickets,
-          closedTickets: responsePayload.closedTickets,
-          pendingTickets: responsePayload.pendingTickets,
-          urgentTickets: responsePayload.urgentTickets,
-          totalSchools: responsePayload.totalSchools,
-        },
+        error: error instanceof Error ? error.message : "Unknown dashboard stats error",
       },
-      "Dashboard stats calculated",
+      "Dashboard stats query failed",
     );
+    res.status(500).json({ error: "DashboardStatsError", message: "No se pudieron calcular las estadisticas." });
   }
-
-  res.json(responsePayload);
 });
 
 router.get("/tickets-by-status", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "usuario_cliente", "visor_cliente"), async (req, res) => {
