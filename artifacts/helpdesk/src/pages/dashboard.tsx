@@ -139,15 +139,18 @@ export default function Dashboard() {
         ? [currentTenantData]
         : [];
 
-    const schools = tenantSource.flatMap((tenant: any) =>
-      (tenant.schools ?? [])
-        .filter((school: any) => school.active)
+    const schools = tenantSource.flatMap((tenant: any) => {
+      const tenantName = normalizeText(tenant?.name, "Sin red educativa");
+      const tenantSchools = Array.isArray(tenant?.schools) ? tenant.schools : [];
+
+      return tenantSchools
+        .filter((school: any) => school?.active && Number.isFinite(Number(school?.id)))
         .map((school: any) => ({
-          id: school.id,
-          name: school.name,
-          tenantName: tenant.name,
-        })),
-    ) as SchoolOption[];
+          id: Number(school.id),
+          name: normalizeText(school?.name, "Sin colegio"),
+          tenantName,
+        }));
+    }) as SchoolOption[];
 
     return schools.sort((a, b) => {
       const byName = a.name.localeCompare(b.name, "es");

@@ -1,9 +1,9 @@
+import { Component, type ErrorInfo, type ReactNode, useEffect } from "react";
 import { useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useGetMe } from "@workspace/api-client-react";
-import { useEffect } from "react";
 
 import { MacmillanLayout } from "@/components/layout-macmillan";
 import Login from "@/pages/login-macmillan";
@@ -33,6 +33,41 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+class RouteErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; message: string | null }> {
+  state = { hasError: false, message: null as string | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return {
+      hasError: true,
+      message: error?.message ?? "Se ha producido un error inesperado en la interfaz.",
+    };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("Route render failed", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
+          <div className="max-w-2xl rounded-3xl border border-rose-200 bg-white p-8 shadow-lg">
+            <h1 className="text-2xl font-semibold text-slate-950">No se pudo cargar esta pantalla</h1>
+            <p className="mt-3 text-sm text-slate-600">
+              La aplicacion detecto un error de render y ha detenido esta vista para evitar una pantalla en blanco.
+            </p>
+            <p className="mt-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {this.state.message ?? "Revisa la consola del navegador para mas detalle."}
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 function ProtectedRoute({ component: Component, roles }: { component: any; roles?: string[] }) {
   const [, setLocation] = useLocation();
@@ -70,7 +105,9 @@ function ProtectedRoute({ component: Component, roles }: { component: any; roles
 
   return (
     <MacmillanLayout>
-      <Component />
+      <RouteErrorBoundary>
+        <Component />
+      </RouteErrorBoundary>
     </MacmillanLayout>
   );
 }
