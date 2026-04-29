@@ -74,8 +74,9 @@ async function getDashboardCollection<T>(
 }
 
 function formatHours(value?: number | null) {
-  if (!value || Number.isNaN(value)) return "N/D";
-  return `${value.toFixed(1)} h`;
+  const parsed = Number(value);
+  if (!parsed || Number.isNaN(parsed)) return "N/D";
+  return `${parsed.toFixed(1)} h`;
 }
 
 function truncateLabel(value: string, max = 22) {
