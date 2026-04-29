@@ -399,7 +399,7 @@ export function MacmillanLayout({ children }: { children: React.ReactNode }) {
   );
 
   const navItems = [
-    { href: "/dashboard", label: "Estadisticas", icon: LayoutDashboard, roles: ["superadmin", "admin_cliente", "manager", "tecnico", "visor_cliente"] },
+    { href: "/dashboard", label: "Estadisticas", icon: LayoutDashboard, roles: ["superadmin", "admin_cliente", "manager", "tecnico", "usuario_cliente", "visor_cliente"] },
     { href: "/tickets", label: "Tickets de consulta", icon: Ticket, roles: ["superadmin", "admin_cliente", "tecnico", "usuario_cliente", "visor_cliente"] },
     { href: "/assistance/request", label: "Solicitar asistencia", icon: ClipboardPlus, roles: ["admin_cliente", "manager", "usuario_cliente"] },
     { href: "/assistance/inbox", label: "Bandeja de asistencias", icon: CalendarClock, roles: ["superadmin", "tecnico"] },

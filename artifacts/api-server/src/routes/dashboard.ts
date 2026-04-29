@@ -4,6 +4,7 @@ import { ticketsTable, usersTable, tenantsTable, auditLogsTable, schoolsTable } 
 import { eq, count, sql, and, gte, lte, desc } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth.js";
 import { parseDbJson } from "../lib/db-json.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -20,22 +21,52 @@ function parseDashboardFilters(req: any) {
   return { tenantId, schoolId, dateFrom, dateTo };
 }
 
+function isDashboardDebugEnabled() {
+  const value = process.env["DASHBOARD_DEBUG"];
+  return value === "true" || value === "1";
+}
+
+function summarizeDashboardScope(
+  filters: { tenantId?: number; schoolId?: number; dateFrom?: string; dateTo?: string },
+  authUser: any,
+) {
+  const isGlobalSupport = authUser.role === "superadmin" || authUser.role === "tecnico";
+  const isTenantClientRole = ["admin_cliente", "manager", "visor_cliente", "usuario_cliente"].includes(authUser.role);
+
+  return {
+    role: authUser.role,
+    scopeType: authUser.scopeType,
+    userId: authUser.userId,
+    authTenantId: authUser.tenantId ?? null,
+    authSchoolId: authUser.schoolId ?? null,
+    filters,
+    mode: isGlobalSupport ? "global" : isTenantClientRole ? "tenant_client" : authUser.scopeType,
+  };
+}
+
 function buildTicketConditions(
   filters: { tenantId?: number; schoolId?: number; dateFrom?: string; dateTo?: string },
   authUser: any,
 ) {
   const conditions: any[] = [];
 
-  if (authUser.role !== "superadmin" && authUser.role !== "tecnico") {
-    if (authUser.scopeType === "school" && authUser.schoolId) {
-      conditions.push(eq(ticketsTable.schoolId, authUser.schoolId));
-    } else if (authUser.tenantId) {
-      conditions.push(eq(ticketsTable.tenantId, authUser.tenantId));
-      if (filters.schoolId) conditions.push(eq(ticketsTable.schoolId, filters.schoolId));
-    }
-  } else {
+  if (authUser.role === "superadmin" || authUser.role === "tecnico") {
     if (filters.tenantId) conditions.push(eq(ticketsTable.tenantId, filters.tenantId));
     if (filters.schoolId) conditions.push(eq(ticketsTable.schoolId, filters.schoolId));
+  } else if (["admin_cliente", "manager", "visor_cliente", "usuario_cliente"].includes(authUser.role) && authUser.tenantId) {
+    conditions.push(eq(ticketsTable.tenantId, authUser.tenantId));
+    if (filters.schoolId) conditions.push(eq(ticketsTable.schoolId, filters.schoolId));
+  } else if (authUser.scopeType === "school" && authUser.schoolId) {
+    conditions.push(eq(ticketsTable.schoolId, authUser.schoolId));
+  } else if (authUser.scopeType === "tenant" && authUser.tenantId) {
+    conditions.push(eq(ticketsTable.tenantId, authUser.tenantId));
+  } else if (authUser.tenantId) {
+    conditions.push(eq(ticketsTable.tenantId, authUser.tenantId));
+  } else {
+    logger.warn(
+      { authUser: { userId: authUser.userId, role: authUser.role, scopeType: authUser.scopeType } },
+      "Dashboard user has no tenant/school scope applied",
+    );
   }
 
   if (filters.dateFrom) {
@@ -73,12 +104,13 @@ function buildSchoolLabelExpression() {
   `;
 }
 
-router.get("/stats", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "visor_cliente"), async (req, res) => {
+router.get("/stats", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "usuario_cliente", "visor_cliente"), async (req, res) => {
   const authUser = (req as any).user;
   const filters = parseDashboardFilters(req);
   const conditions = buildTicketConditions(filters, authUser);
   const where = conditions.length > 0 ? and(...conditions) : undefined;
   const schoolLabel = buildSchoolLabelExpression();
+  const scopeSummary = summarizeDashboardScope(filters, authUser);
 
   const [
     totalResult,
@@ -115,7 +147,7 @@ router.get("/stats", requireAuth, requireRole("superadmin", "admin_cliente", "ma
     db.select({ count: count() }).from(usersTable).where(eq(usersTable.role, "tecnico")),
   ]);
 
-  res.json({
+  const responsePayload = {
     totalTickets: Number(totalResult[0]?.count ?? 0),
     newTickets: Number(newResult[0]?.count ?? 0),
     openTickets: Number(openResult[0]?.count ?? 0),
@@ -127,10 +159,31 @@ router.get("/stats", requireAuth, requireRole("superadmin", "admin_cliente", "ma
     totalSchools: schoolsResult.length,
     totalUsers: Number(usersResult[0]?.count ?? 0),
     totalTechnicians: Number(techResult[0]?.count ?? 0),
-  });
+  };
+
+  if (isDashboardDebugEnabled()) {
+    logger.info(
+      {
+        dashboard: scopeSummary,
+        found: {
+          totalTickets: responsePayload.totalTickets,
+          newTickets: responsePayload.newTickets,
+          openTickets: responsePayload.openTickets,
+          resolvedTickets: responsePayload.resolvedTickets,
+          closedTickets: responsePayload.closedTickets,
+          pendingTickets: responsePayload.pendingTickets,
+          urgentTickets: responsePayload.urgentTickets,
+          totalSchools: responsePayload.totalSchools,
+        },
+      },
+      "Dashboard stats calculated",
+    );
+  }
+
+  res.json(responsePayload);
 });
 
-router.get("/tickets-by-status", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "visor_cliente"), async (req, res) => {
+router.get("/tickets-by-status", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "usuario_cliente", "visor_cliente"), async (req, res) => {
   const authUser = (req as any).user;
   const filters = parseDashboardFilters(req);
   const conditions = buildTicketConditions(filters, authUser);
@@ -151,7 +204,7 @@ router.get("/tickets-by-status", requireAuth, requireRole("superadmin", "admin_c
   res.json(result.map((r) => ({ status: r.status, count: Number(r.count), label: statusLabels[r.status] ?? r.status })));
 });
 
-router.get("/tickets-by-priority", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "visor_cliente"), async (req, res) => {
+router.get("/tickets-by-priority", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "usuario_cliente", "visor_cliente"), async (req, res) => {
   const authUser = (req as any).user;
   const filters = parseDashboardFilters(req);
   const conditions = buildTicketConditions(filters, authUser);
@@ -169,7 +222,7 @@ router.get("/tickets-by-priority", requireAuth, requireRole("superadmin", "admin
   res.json(result.map((r) => ({ priority: r.priority, count: Number(r.count), label: priorityLabels[r.priority] ?? r.priority })));
 });
 
-router.get("/tickets-over-time", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "visor_cliente"), async (req, res) => {
+router.get("/tickets-over-time", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "usuario_cliente", "visor_cliente"), async (req, res) => {
   const authUser = (req as any).user;
   const filters = parseDashboardFilters(req);
   const period = (req.query["period"] as string) || "month";
@@ -207,7 +260,7 @@ router.get("/tickets-over-time", requireAuth, requireRole("superadmin", "admin_c
   res.json(created.map((c) => ({ date: String(c.date), created: Number(c.count), resolved: resolvedMap.get(String(c.date)) ?? 0 })));
 });
 
-router.get("/tickets-by-technician", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "visor_cliente"), async (req, res) => {
+router.get("/tickets-by-technician", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "usuario_cliente", "visor_cliente"), async (req, res) => {
   const authUser = (req as any).user;
   const filters = parseDashboardFilters(req);
   const conditions = buildTicketConditions(filters, authUser);
@@ -229,7 +282,7 @@ router.get("/tickets-by-technician", requireAuth, requireRole("superadmin", "adm
   res.json(result.map((r) => ({ userId: r.userId ?? 0, userName: r.userName ?? "Sin asignar", count: Number(r.count), resolved: Number(r.resolved) })));
 });
 
-router.get("/recent-activity", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "visor_cliente"), async (req, res) => {
+router.get("/recent-activity", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "usuario_cliente", "visor_cliente"), async (req, res) => {
   const authUser = (req as any).user;
   const filters = parseDashboardFilters(req);
   const limit = Math.min(50, Math.max(1, Number(req.query["limit"]) || 10));
@@ -285,7 +338,7 @@ router.get("/recent-activity", requireAuth, requireRole("superadmin", "admin_cli
   }));
 });
 
-router.get("/top-categories", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "visor_cliente"), async (req, res) => {
+router.get("/top-categories", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "usuario_cliente", "visor_cliente"), async (req, res) => {
   const authUser = (req as any).user;
   const filters = parseDashboardFilters(req);
   const limit = Math.min(20, Math.max(1, Number(req.query["limit"]) || 5));
@@ -305,7 +358,7 @@ router.get("/top-categories", requireAuth, requireRole("superadmin", "admin_clie
   res.json(result.map((r) => ({ category: r.category ?? "", count: Number(r.count) })));
 });
 
-router.get("/tickets-by-school", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "visor_cliente"), async (req, res) => {
+router.get("/tickets-by-school", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "usuario_cliente", "visor_cliente"), async (req, res) => {
   const authUser = (req as any).user;
   const filters = parseDashboardFilters(req);
 
@@ -328,7 +381,7 @@ router.get("/tickets-by-school", requireAuth, requireRole("superadmin", "admin_c
   res.json(result.map((item) => ({ schoolName: item.schoolName, count: Number(item.count) })));
 });
 
-router.get("/tickets-by-inquiry-type", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "visor_cliente"), async (req, res) => {
+router.get("/tickets-by-inquiry-type", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "usuario_cliente", "visor_cliente"), async (req, res) => {
   const authUser = (req as any).user;
   const filters = parseDashboardFilters(req);
 
@@ -349,7 +402,7 @@ router.get("/tickets-by-inquiry-type", requireAuth, requireRole("superadmin", "a
   res.json(result.map((item) => ({ inquiryType: item.inquiryType, count: Number(item.count) })));
 });
 
-router.get("/tickets-by-stage", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "visor_cliente"), async (req, res) => {
+router.get("/tickets-by-stage", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "usuario_cliente", "visor_cliente"), async (req, res) => {
   const authUser = (req as any).user;
   const filters = parseDashboardFilters(req);
 
@@ -370,7 +423,7 @@ router.get("/tickets-by-stage", requireAuth, requireRole("superadmin", "admin_cl
   res.json(result.map((item) => ({ stage: item.stage, count: Number(item.count) })));
 });
 
-router.get("/tickets-by-school-and-reporter", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "visor_cliente"), async (req, res) => {
+router.get("/tickets-by-school-and-reporter", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "usuario_cliente", "visor_cliente"), async (req, res) => {
   const authUser = (req as any).user;
   const filters = parseDashboardFilters(req);
 
@@ -403,7 +456,7 @@ router.get("/tickets-by-school-and-reporter", requireAuth, requireRole("superadm
   })));
 });
 
-router.get("/resolution-by-school", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "visor_cliente"), async (req, res) => {
+router.get("/resolution-by-school", requireAuth, requireRole("superadmin", "admin_cliente", "manager", "tecnico", "usuario_cliente", "visor_cliente"), async (req, res) => {
   const authUser = (req as any).user;
   const filters = parseDashboardFilters(req);
 

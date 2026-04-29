@@ -82,7 +82,7 @@ function Router() {
   if (location === "/forgot-password") return <ForgotPassword />;
   if (location === "/reset-password") return <ResetPassword />;
   if (location === "/change-password") return <PasswordChangeRoute />;
-  if (location === "/dashboard") return <ProtectedRoute component={Dashboard} roles={["superadmin", "admin_cliente", "manager", "tecnico", "visor_cliente"]} />;
+  if (location === "/dashboard") return <ProtectedRoute component={Dashboard} roles={["superadmin", "admin_cliente", "manager", "tecnico", "usuario_cliente", "visor_cliente"]} />;
   if (location === "/tickets/new") return <ProtectedRoute component={NewTicket} roles={["superadmin", "admin_cliente", "tecnico", "usuario_cliente", "visor_cliente"]} />;
   if (location.startsWith("/tickets/") && location !== "/tickets") return <ProtectedRoute component={TicketDetail} roles={["superadmin", "admin_cliente", "tecnico", "usuario_cliente", "visor_cliente"]} />;
   if (location === "/tickets") return <ProtectedRoute component={Tickets} roles={["superadmin", "admin_cliente", "tecnico", "usuario_cliente", "visor_cliente"]} />;

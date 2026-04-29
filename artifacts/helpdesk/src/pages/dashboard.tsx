@@ -88,7 +88,7 @@ function ChartEmpty({ message }: { message: string }) {
 
 export default function Dashboard() {
   const { data: user } = useGetMe();
-  const canUseGlobalFilters = user?.role === "superadmin" || user?.role === "tecnico" || user?.role === "admin_cliente" || user?.role === "visor_cliente";
+  const canUseGlobalFilters = user?.role === "superadmin" || user?.role === "tecnico";
   const tenantId = canUseGlobalFilters ? undefined : user?.tenantId;
   const [selectedSchoolId, setSelectedSchoolId] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
@@ -112,7 +112,7 @@ export default function Dashboard() {
     { query: { enabled: !!user && (user?.role === "superadmin" || user?.role === "tecnico") } } as any,
   );
   const { data: currentTenantData } = useGetTenant(user?.tenantId ?? 0, {
-    query: { enabled: !!user?.tenantId && (user?.role === "admin_cliente" || user?.role === "visor_cliente") },
+    query: { enabled: !!user?.tenantId && !canUseGlobalFilters },
   } as any);
 
   const availableSchools = useMemo(() => {
@@ -288,24 +288,26 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {canUseGlobalFilters && (
-          <div className="mt-6 grid gap-3 rounded-2xl border border-white/80 bg-white/80 p-4 shadow-sm lg:grid-cols-[1.3fr_1fr_1fr]">
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Colegio</p>
-              <Select value={selectedSchoolId} onValueChange={setSelectedSchoolId}>
-                <SelectTrigger className="bg-white">
-                  <SelectValue placeholder="Todos los colegios" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los colegios</SelectItem>
-                  {availableSchools.map((school) => (
-                    <SelectItem key={school.id} value={String(school.id)}>
-                      {school.name} - {school.tenantName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+        {(canUseGlobalFilters || user?.tenantId) && (
+          <div className={`mt-6 grid gap-3 rounded-2xl border border-white/80 bg-white/80 p-4 shadow-sm ${canUseGlobalFilters ? "lg:grid-cols-[1.3fr_1fr_1fr]" : "lg:grid-cols-2"}`}>
+            {canUseGlobalFilters && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Colegio</p>
+                <Select value={selectedSchoolId} onValueChange={setSelectedSchoolId}>
+                  <SelectTrigger className="bg-white">
+                    <SelectValue placeholder="Todos los colegios" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los colegios</SelectItem>
+                    {availableSchools.map((school) => (
+                      <SelectItem key={school.id} value={String(school.id)}>
+                        {school.name} - {school.tenantName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Desde</p>
