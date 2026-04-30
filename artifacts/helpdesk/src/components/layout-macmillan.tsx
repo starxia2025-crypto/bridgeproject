@@ -330,6 +330,18 @@ export function MacmillanLayout({ children }: { children: React.ReactNode }) {
   const brandTextColor = tenantConfig.tenantPrimaryColor || "#0f172a";
   const sidebarBackgroundColor = tenantConfig.tenantSidebarBackgroundColor || "#ffffff";
   const sidebarTextColor = tenantConfig.tenantSidebarTextColor || "#0f172a";
+  const tenantName = typeof tenantConfig.tenantName === "string" ? tenantConfig.tenantName.trim() : "";
+  const isMacmillanSupportUser = user.role === "tecnico" && tenantName.toLowerCase().includes("macmillan");
+  const ticketsMenuLabel =
+    user.role === "admin_cliente"
+      ? "Bandeja de solicitudes"
+      : user.role === "usuario_cliente" || user.role === "manager"
+        ? "Mis solicitudes"
+        : isMacmillanSupportUser
+          ? "Bandeja de tickets"
+          : "Tickets de consulta";
+  const dashboardMenuLabel = "Dashboard";
+  const mochilasMenuLabel = isMacmillanSupportUser ? "Pedidos (mochilas)" : "Consulta de Mochilas";
   const tenantQuickLinks = Array.isArray(tenantConfig.tenantQuickLinks) ? tenantConfig.tenantQuickLinks : [];
   const navMutedColor = sidebarTextColor === "#ffffff" || sidebarTextColor === "#f8fafc" ? "rgba(255,255,255,0.72)" : "rgba(15,23,42,0.66)";
   const navHoverColor = sidebarTextColor === "#ffffff" || sidebarTextColor === "#f8fafc" ? "rgba(255,255,255,0.12)" : "rgba(15,23,42,0.08)";
@@ -399,11 +411,11 @@ export function MacmillanLayout({ children }: { children: React.ReactNode }) {
   );
 
   const navItems = [
-    { href: "/dashboard", label: "Estadisticas", icon: LayoutDashboard, roles: ["superadmin", "admin_cliente", "manager", "tecnico", "usuario_cliente", "visor_cliente"] },
-    { href: "/tickets", label: "Tickets de consulta", icon: Ticket, roles: ["superadmin", "admin_cliente", "tecnico", "usuario_cliente", "visor_cliente"] },
+    { href: "/dashboard", label: dashboardMenuLabel, icon: LayoutDashboard, roles: ["superadmin", "admin_cliente", "manager", "tecnico", "usuario_cliente", "visor_cliente"] },
+    { href: "/tickets", label: ticketsMenuLabel, icon: Ticket, roles: ["superadmin", "admin_cliente", "manager", "tecnico", "usuario_cliente", "visor_cliente"] },
     { href: "/assistance/request", label: "Solicitar asistencia", icon: ClipboardPlus, roles: ["admin_cliente", "manager", "usuario_cliente"] },
     { href: "/assistance/inbox", label: "Bandeja de asistencias", icon: CalendarClock, roles: ["superadmin", "tecnico"] },
-    { href: "/mochilas", label: "Consulta de Mochilas", icon: LifeBuoy, roles: ["superadmin", "tecnico"], externalDesktopApp: true },
+    { href: "/mochilas", label: mochilasMenuLabel, icon: LifeBuoy, roles: ["superadmin", "tecnico"], externalDesktopApp: true },
     { href: "/integrations/apis", label: "APIs externas", icon: Cable, roles: ["superadmin", "tecnico"] },
     { href: "/portal", label: "Centro de ayuda", icon: BookOpen, roles: ["superadmin", "admin_cliente", "manager", "tecnico", "usuario_cliente", "visor_cliente"] },
     { href: "/clients", label: "Colegios", icon: Building2, roles: ["superadmin", "tecnico"] },
