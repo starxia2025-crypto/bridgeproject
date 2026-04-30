@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useGetMe, useListDocuments, useListTenants } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -103,16 +103,29 @@ export default function PortalAdmin() {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [activeType, setActiveType] = useState<string>("all");
+  const [selectedTenantId, setSelectedTenantId] = useState<number | undefined>(undefined);
   const [open, setOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [editingDocumentId, setEditingDocumentId] = useState<number | null>(null);
 
-  const { data: docsData, isLoading, refetch } = useListDocuments({
-    tenantId: user?.role === "superadmin" ? undefined : user?.tenantId,
-    search: search || undefined,
-    category: activeCategory !== "all" ? activeCategory : undefined,
-    limit: 50,
-  });
+  const { data: docsData, isLoading, refetch } = useListDocuments(
+    {
+      tenantId:
+        user?.role === "tecnico"
+          ? selectedTenantId
+          : user?.role === "superadmin"
+            ? undefined
+            : user?.tenantId,
+      search: search || undefined,
+      category: activeCategory !== "all" ? activeCategory : undefined,
+      limit: 50,
+    },
+    {
+      query: {
+        enabled: user?.role !== "tecnico" || Boolean(selectedTenantId),
+      },
+    },
+  );
 
   const { data: tenants } = useListTenants(
     { limit: 100 },
@@ -134,8 +147,19 @@ export default function PortalAdmin() {
     },
   });
 
-  const canManageContent = ["superadmin", "admin_cliente", "tecnico", "manager"].includes(user?.role || "");
+  const canManageContent = user?.role === "tecnico";
   const documents = docsData?.data ?? [];
+
+  useEffect(() => {
+    if (user?.role !== "tecnico") return;
+    if (selectedTenantId) return;
+
+    const fallbackTenantId = user?.tenantId ?? tenants?.data?.[0]?.id;
+    if (fallbackTenantId) {
+      setSelectedTenantId(fallbackTenantId);
+      form.setValue("tenantId", fallbackTenantId);
+    }
+  }, [form, selectedTenantId, tenants?.data, user?.role, user?.tenantId]);
 
   const filteredDocuments = useMemo(() => {
     if (activeType === "all") return documents;
@@ -164,7 +188,7 @@ export default function PortalAdmin() {
       category: "general",
       url: "",
       content: "",
-      tenantId: user?.tenantId ?? undefined,
+      tenantId: user?.role === "tecnico" ? selectedTenantId : (user?.tenantId ?? undefined),
       tags: "",
       published: true,
     });
@@ -213,8 +237,10 @@ export default function PortalAdmin() {
 
   async function onSubmit(values: CreateDocumentValues) {
     const tenantId =
-      user?.role === "superadmin" || user?.role === "tecnico"
-        ? values.tenantId!
+      user?.role === "tecnico"
+        ? (values.tenantId ?? selectedTenantId)!
+        : user?.role === "superadmin"
+          ? values.tenantId!
         : (user?.tenantId as number);
 
     try {
@@ -338,6 +364,37 @@ export default function PortalAdmin() {
               <Button className="h-14 rounded-2xl bg-[#2952d6] px-8 text-base font-semibold hover:bg-[#1f43bb]">Buscar</Button>
             </div>
 
+            {user?.role === "tecnico" && (
+              <div className="grid gap-3 border-t border-slate-200 pt-5 md:grid-cols-[minmax(0,340px)_1fr] md:items-end">
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-slate-700">Colegio</p>
+                  <Select
+                    value={selectedTenantId?.toString()}
+                    onValueChange={(value) => {
+                      const nextTenantId = Number(value);
+                      setSelectedTenantId(nextTenantId);
+                      setActiveCategory("all");
+                      form.setValue("tenantId", nextTenantId);
+                    }}
+                  >
+                    <SelectTrigger className="h-12 rounded-2xl border-slate-200 bg-white">
+                      <SelectValue placeholder="Selecciona un colegio" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tenants?.data?.map((tenant) => (
+                        <SelectItem key={tenant.id} value={tenant.id.toString()}>
+                          {tenant.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-sm leading-6 text-slate-500">
+                  El soporte tecnico puede cambiar de colegio para consultar, publicar, editar o eliminar recursos del centro seleccionado.
+                </p>
+              </div>
+            )}
+
             <div className="space-y-4 border-t border-slate-200 pt-5">
               <div className="flex items-center gap-4">
                 <p className="text-sm font-semibold text-slate-600">Explorar contenido</p>
@@ -390,30 +447,14 @@ export default function PortalAdmin() {
                       </DialogHeader>
                       <Form {...form}>
                         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                          {(user?.role === "superadmin" || user?.role === "tecnico") && (
-                            <FormField
-                              control={form.control}
-                              name="tenantId"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Cliente</FormLabel>
-                                  <Select onValueChange={(value) => field.onChange(parseInt(value, 10))} value={field.value?.toString()}>
-                                    <FormControl>
-                                      <SelectTrigger>
-                                        <SelectValue placeholder="Selecciona un cliente" />
-                                      </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                      {tenants?.data.map((tenant) => (
-                                        <SelectItem key={tenant.id} value={tenant.id.toString()}>{tenant.name}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          )}
+                          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                              Colegio seleccionado
+                            </p>
+                            <p className="mt-1 text-sm font-medium text-slate-900">
+                              {tenants?.data?.find((tenant) => tenant.id === (form.getValues("tenantId") ?? selectedTenantId))?.name ?? "Selecciona un colegio en la pantalla principal"}
+                            </p>
+                          </div>
 
                           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                             <FormField
@@ -523,7 +564,9 @@ export default function PortalAdmin() {
                           />
                           <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-                            <Button type="submit">{editingDocumentId ? "Guardar cambios" : "Publicar"}</Button>
+                            <Button type="submit" disabled={user?.role === "tecnico" && !selectedTenantId}>
+                              {editingDocumentId ? "Guardar cambios" : "Publicar"}
+                            </Button>
                           </DialogFooter>
                         </form>
                       </Form>
