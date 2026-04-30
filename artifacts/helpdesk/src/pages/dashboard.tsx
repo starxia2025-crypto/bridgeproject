@@ -355,19 +355,13 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
-      <section className="rounded-[2rem] border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-indigo-50/70 p-8 shadow-sm">
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-          <div className="max-w-3xl space-y-3">
-            <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-indigo-600 shadow-sm">
-              <BarChart3 className="h-3.5 w-3.5" />
-              Estadisticas
-            </div>
-            <div>
-              <h1 className="text-4xl font-semibold tracking-tight text-slate-950">Panel de consultas</h1>
-              <p className="mt-2 max-w-2xl text-base text-slate-600">
-                Una vista clara de volumen, resolucion, tipologias y carga por colegio para tomar decisiones rapidas.
-              </p>
-            </div>
+      <section className="space-y-6">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="max-w-3xl">
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Dashboard</h1>
+            <p className="mt-1 max-w-2xl text-slate-500">
+              Una vista clara de volumen, resolucion, tipologias y carga por colegio para tomar decisiones rapidas.
+            </p>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
