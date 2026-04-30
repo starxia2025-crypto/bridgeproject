@@ -227,11 +227,6 @@ async function openMeeUserManagerForTicket(ticket: any) {
     throw new Error("Este ticket no tiene un email de alumno disponible.");
   }
 
-  if (window.desktopBridge?.openMeeUserManager) {
-    await window.desktopBridge.openMeeUserManager(email);
-    return;
-  }
-
   try {
     await navigator.clipboard.writeText(email);
   } catch {
@@ -239,26 +234,6 @@ async function openMeeUserManagerForTicket(ticket: any) {
   }
 
   window.open(meeAdminUrl, "_blank", "noopener,noreferrer");
-}
-
-async function sendResolvedTicketEmailForDesktop(ticket: any, resolverName?: string | null) {
-  if (!window.desktopBridge?.sendResolvedTicketEmail) {
-    return;
-  }
-
-  await window.desktopBridge.sendResolvedTicketEmail({
-    ticketNumber: safeDisplayText(ticket.ticketNumber),
-    title: safeDisplayText(ticket.title),
-    description: safeDisplayText(ticket.description),
-    status: "resuelto",
-    priority: safeDisplayText(ticket.priority),
-    creatorName: safeDisplayText(ticket.createdByName),
-    creatorEmail: safeDisplayText(ticket.customFields?.reporterEmail ?? ""),
-    schoolName: safeDisplayText(ticket.schoolName),
-    tenantName: safeDisplayText(ticket.tenantName),
-    resolvedByName: safeDisplayText(resolverName ?? ""),
-    resolvedAt: new Date().toLocaleString("es-ES"),
-  });
 }
 
 function buildBulkImportTemplateRow(user: { email?: string | null; schoolName?: string | null; tenantName?: string | null } | undefined) {
@@ -411,12 +386,10 @@ function SupportTicketCard({
           variant: "destructive",
         });
       });
-      if (!window.desktopBridge?.openMeeUserManager) {
-        toast({
-          title: "MEE Admin abierto",
-          description: "Se ha abierto la web corporativa en una nueva pestaña y se ha intentado copiar el email del alumno.",
-        });
-      }
+      toast({
+        title: "MEE Admin abierto",
+        description: "Se ha abierto la web corporativa en una nueva pestaña y se ha intentado copiar el email del alumno.",
+      });
       return;
     }
 
@@ -570,20 +543,7 @@ export default function Tickets() {
   async function handleResolveTicket(ticketId: number) {
     const ticket = filteredSupportTickets.find((item) => item.id === ticketId);
     await changeStatus.mutateAsync({ ticketId, data: { status: TicketStatus.resuelto } });
-
-    if (!ticket) {
-      return;
-    }
-
-    try {
-      await sendResolvedTicketEmailForDesktop(ticket, user?.name);
-    } catch (error) {
-      toast({
-        title: "Ticket resuelto, pero no se pudo enviar el correo",
-        description: error instanceof Error ? error.message : "Revisa Outlook en este equipo.",
-        variant: "destructive",
-      });
-    }
+    if (!ticket) return;
   }
 
   async function handleImportFile() {

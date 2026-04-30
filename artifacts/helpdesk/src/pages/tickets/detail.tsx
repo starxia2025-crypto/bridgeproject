@@ -32,7 +32,7 @@ function readField(ticket: any, key: string) {
 function fixMojibake(value: string) {
   let next = value;
 
-  if (/[ÃƒÃ‚Ã¢]/.test(next)) {
+  if (/[ÃƒÆ’Ãƒâ€šÃƒÂ¢]/.test(next)) {
     try {
       next = new TextDecoder("utf-8", { fatal: false }).decode(Uint8Array.from(next, (char) => char.charCodeAt(0) & 0xff)) || next;
     } catch {
@@ -41,45 +41,45 @@ function fixMojibake(value: string) {
   }
 
   const replacements: Array<[RegExp, string]> = [
-    [/activaci\?n/gi, "activación"],
-    [/informaci\?n/gi, "información"],
-    [/resoluci\?n/gi, "resolución"],
-    [/educaci\?n/gi, "educación"],
-    [/aplicaci\?n/gi, "aplicación"],
-    [/descripci\?n/gi, "descripción"],
-    [/asignaci\?n/gi, "asignación"],
-    [/gesti\?n/gi, "gestión"],
-    [/sesi\?n/gi, "sesión"],
-    [/versi\?n/gi, "versión"],
-    [/revisi\?n/gi, "revisión"],
-    [/categori\?a/gi, "categoría"],
-    [/matr[i?]cula/gi, "matrícula"],
-    [/contrase\?a/gi, "contraseña"],
-    [/espa\?ol/gi, "español"],
-    [/atenci\?n/gi, "atención"],
-    [/soluci\?n/gi, "solución"],
-    [/IntÃ©ntalo/gi, "Inténtalo"],
-    [/DescripciÃ³n/gi, "Descripción"],
-    [/CategorÃ­a/gi, "Categoría"],
-    [/categorÃ­a/gi, "categoría"],
-    [/RevisiÃ³n/gi, "Revisión"],
-    [/revisiÃ³n/gi, "revisión"],
-    [/devoluciÃ³n/gi, "devolución"],
-    [/verÃ¡n/gi, "verán"],
-    [/Ã¡/g, "á"],
-    [/Ã©/g, "é"],
-    [/Ã­/g, "í"],
-    [/Ã³/g, "ó"],
-    [/Ãº/g, "ú"],
-    [/Ã±/g, "ñ"],
-    [/ÃƒÂ¡/g, "á"],
-    [/ÃƒÂ©/g, "é"],
-    [/ÃƒÂ­/g, "í"],
-    [/ÃƒÂ³/g, "ó"],
-    [/ÃƒÂº/g, "ú"],
-    [/ÃƒÂ±/g, "ñ"],
-    [/Ã‚Âº/g, "º"],
-    [/Ã‚Â·/g, "·"],
+    [/activaci\?n/gi, "activaciÃ³n"],
+    [/informaci\?n/gi, "informaciÃ³n"],
+    [/resoluci\?n/gi, "resoluciÃ³n"],
+    [/educaci\?n/gi, "educaciÃ³n"],
+    [/aplicaci\?n/gi, "aplicaciÃ³n"],
+    [/descripci\?n/gi, "descripciÃ³n"],
+    [/asignaci\?n/gi, "asignaciÃ³n"],
+    [/gesti\?n/gi, "gestiÃ³n"],
+    [/sesi\?n/gi, "sesiÃ³n"],
+    [/versi\?n/gi, "versiÃ³n"],
+    [/revisi\?n/gi, "revisiÃ³n"],
+    [/categori\?a/gi, "categorÃ­a"],
+    [/matr[i?]cula/gi, "matrÃ­cula"],
+    [/contrase\?a/gi, "contraseÃ±a"],
+    [/espa\?ol/gi, "espaÃ±ol"],
+    [/atenci\?n/gi, "atenciÃ³n"],
+    [/soluci\?n/gi, "soluciÃ³n"],
+    [/IntÃƒÂ©ntalo/gi, "IntÃ©ntalo"],
+    [/DescripciÃƒÂ³n/gi, "DescripciÃ³n"],
+    [/CategorÃƒÂ­a/gi, "CategorÃ­a"],
+    [/categorÃƒÂ­a/gi, "categorÃ­a"],
+    [/RevisiÃƒÂ³n/gi, "RevisiÃ³n"],
+    [/revisiÃƒÂ³n/gi, "revisiÃ³n"],
+    [/devoluciÃƒÂ³n/gi, "devoluciÃ³n"],
+    [/verÃƒÂ¡n/gi, "verÃ¡n"],
+    [/ÃƒÂ¡/g, "Ã¡"],
+    [/ÃƒÂ©/g, "Ã©"],
+    [/ÃƒÂ­/g, "Ã­"],
+    [/ÃƒÂ³/g, "Ã³"],
+    [/ÃƒÂº/g, "Ãº"],
+    [/ÃƒÂ±/g, "Ã±"],
+    [/ÃƒÆ’Ã‚Â¡/g, "Ã¡"],
+    [/ÃƒÆ’Ã‚Â©/g, "Ã©"],
+    [/ÃƒÆ’Ã‚Â­/g, "Ã­"],
+    [/ÃƒÆ’Ã‚Â³/g, "Ã³"],
+    [/ÃƒÆ’Ã‚Âº/g, "Ãº"],
+    [/ÃƒÆ’Ã‚Â±/g, "Ã±"],
+    [/Ãƒâ€šÃ‚Âº/g, "Âº"],
+    [/Ãƒâ€šÃ‚Â·/g, "Â·"],
   ];
 
   return replacements.reduce((current, [pattern, replacement]) => current.replace(pattern, replacement), next);
@@ -133,11 +133,11 @@ function formatTicketFieldLabel(key: string) {
     subjectType: "La consulta es sobre",
     stage: "Etapa",
     course: "Curso",
-    studentEnrollment: "Matrícula del alumno",
+    studentEnrollment: "MatrÃ­cula del alumno",
     subject: "Asignatura",
     observations: "Observaciones",
-    activationRequested: "Activación urgente",
-    returnRequested: "Devolución solicitada",
+    activationRequested: "ActivaciÃ³n urgente",
+    returnRequested: "DevoluciÃ³n solicitada",
     currentStudentEmail: "Correo actual",
     newStudentEmail: "Correo nuevo",
     affectedEmail: "Correo afectado",
@@ -152,11 +152,11 @@ function formatTicketFieldLabel(key: string) {
 
 function formatAuditAction(action: unknown) {
   const actions: Record<string, string> = {
-    create: "creó la consulta",
-    update: "actualizó la consulta",
-    assign: "asignó la consulta",
-    status_change: "cambió el estado",
-    bulk_import: "importó la consulta",
+    create: "creÃ³ la consulta",
+    update: "actualizÃ³ la consulta",
+    assign: "asignÃ³ la consulta",
+    status_change: "cambiÃ³ el estado",
+    bulk_import: "importÃ³ la consulta",
   };
 
   return actions[String(action ?? "")] ?? safeDisplayText(action);
@@ -218,7 +218,7 @@ export default function TicketDetail() {
       onError: (error) => {
         toast({
           title: "No se pudo actualizar el estado",
-          description: error instanceof Error ? safeDisplayText(error.message) : "Inténtalo de nuevo.",
+          description: error instanceof Error ? safeDisplayText(error.message) : "IntÃ©ntalo de nuevo.",
           variant: "destructive",
         });
       },
@@ -238,7 +238,7 @@ export default function TicketDetail() {
       onError: (error) => {
         toast({
           title: "No se pudo actualizar la consulta",
-          description: error instanceof Error ? safeDisplayText(error.message) : "Inténtalo de nuevo.",
+          description: error instanceof Error ? safeDisplayText(error.message) : "IntÃ©ntalo de nuevo.",
           variant: "destructive",
         });
       },
@@ -359,7 +359,7 @@ export default function TicketDetail() {
   }
 
   if (ticketError && !ticket) {
-    const errorMessage = ticketError instanceof Error ? ticketError.message : "Inténtalo de nuevo desde la bandeja.";
+    const errorMessage = ticketError instanceof Error ? ticketError.message : "IntÃ©ntalo de nuevo desde la bandeja.";
     return (
       <div className="max-w-3xl mx-auto space-y-4">
         <Button variant="ghost" onClick={() => setLocation("/tickets")} className="gap-2 -ml-4 text-slate-500">
@@ -438,11 +438,6 @@ export default function TicketDetail() {
       return;
     }
 
-    if (window.desktopBridge?.openMeeUserManager) {
-      await window.desktopBridge.openMeeUserManager(meeAdminEmail);
-      return;
-    }
-
     try {
       await navigator.clipboard.writeText(meeAdminEmail);
       toast({
@@ -466,11 +461,6 @@ export default function TicketDetail() {
       return;
     }
 
-    if (window.desktopBridge?.searchSalesforceEmail) {
-      await window.desktopBridge.searchSalesforceEmail(meeAdminEmail);
-      return;
-    }
-
     try {
       await navigator.clipboard.writeText(meeAdminEmail);
     } catch {
@@ -488,7 +478,7 @@ export default function TicketDetail() {
     if (!ticketOrderId) {
       toast({
         title: "No se pudo abrir el pedido",
-        description: "Este ticket no tiene número de pedido guardado.",
+        description: "Este ticket no tiene nÃºmero de pedido guardado.",
         variant: "destructive",
       });
       return;
@@ -505,7 +495,7 @@ export default function TicketDetail() {
     } catch (error) {
       toast({
         title: "No se pudo consultar el pedido",
-        description: error instanceof Error ? safeDisplayText(error.message) : "No se pudo consultar la información en Mochilas.",
+        description: error instanceof Error ? safeDisplayText(error.message) : "No se pudo consultar la informaciÃ³n en Mochilas.",
         variant: "destructive",
       });
     } finally {
@@ -517,18 +507,9 @@ export default function TicketDetail() {
     const token = safeDisplayText(tokenOverride ?? meeAdminToken).trim();
     if (!token) {
       toast({
-        title: "No se pudo cambiar la contraseña",
+        title: "No se pudo cambiar la contraseÃ±a",
         description: "Este ticket no tiene token de Mochilas disponible.",
         variant: "destructive",
-      });
-      return;
-    }
-
-    if (window.desktopBridge?.openMeeResetPassword) {
-      await window.desktopBridge.openMeeResetPassword(token);
-      toast({
-        title: "Contraseña preparada",
-        description: "Se ha copiado Macmillaniberia al portapapeles.",
       });
       return;
     }
@@ -536,13 +517,13 @@ export default function TicketDetail() {
     try {
       await navigator.clipboard.writeText("Macmillaniberia");
       toast({
-        title: "Contraseña copiada",
-        description: "Abre MEE Admin desde la app de escritorio para automatizar el cambio.",
+        title: "ContraseÃ±a copiada",
+        description: "Se ha copiado la contrase??a temporal para completar el cambio manualmente en MEE Admin.",
       });
     } catch {
       toast({
-        title: "Disponible solo en escritorio",
-        description: "La automatización de MEE Admin solo está disponible en la app de escritorio.",
+        title: "No se pudo copiar la contrase??a",
+        description: "Copia la contrase??a temporal manualmente e intenta completar el cambio en MEE Admin.",
         variant: "destructive",
       });
     }
@@ -561,7 +542,7 @@ export default function TicketDetail() {
     } catch {
       toast({
         title: "No se pudo copiar",
-        description: "El navegador no permitió usar el portapapeles.",
+        description: "El navegador no permitiÃ³ usar el portapapeles.",
         variant: "destructive",
       });
     }
@@ -629,7 +610,7 @@ export default function TicketDetail() {
                     <SelectContent>
                       <SelectItem value={TicketStatus.nuevo}>Nuevo</SelectItem>
                       <SelectItem value={TicketStatus.pendiente}>Pendiente</SelectItem>
-                      <SelectItem value={TicketStatus.en_revision}>En revisión</SelectItem>
+                      <SelectItem value={TicketStatus.en_revision}>En revisiÃ³n</SelectItem>
                       <SelectItem value={TicketStatus.en_proceso}>En proceso</SelectItem>
                       <SelectItem value={TicketStatus.esperando_cliente}>Esperando cliente</SelectItem>
                       <SelectItem value={TicketStatus.resuelto}>Resuelto</SelectItem>
@@ -726,7 +707,7 @@ export default function TicketDetail() {
                     <div key={item.key} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                       <div className="text-xs uppercase tracking-wide text-slate-500">{safeDisplayText(item.label)}</div>
                       <div className="mt-1 text-sm font-medium text-slate-900 whitespace-pre-wrap">
-                        {typeof item.value === "boolean" ? (item.value ? "Sí" : "No") : safeDisplayText(item.value)}
+                        {typeof item.value === "boolean" ? (item.value ? "SÃ­" : "No") : safeDisplayText(item.value)}
                       </div>
                     </div>
                   ))}
@@ -748,7 +729,7 @@ export default function TicketDetail() {
                   </Button>
                   <Button type="button" variant="outline" className="gap-2" onClick={() => void handleOpenMeeResetPassword()}>
                     <KeyRound className="h-4 w-4" />
-                    Cambiar contraseña
+                    Cambiar contraseÃ±a
                   </Button>
                   <Button type="button" variant="outline" className="gap-2" onClick={() => void handleOpenMochilasOrder()} disabled={isLoadingOrder}>
                     <Backpack className="h-4 w-4" />
@@ -759,18 +740,18 @@ export default function TicketDetail() {
               {!isAccessRequestTicket && actionItems.length > 0 && (
                 <div className="space-y-3 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">Líneas marcadas en la consulta</p>
-                    <p className="mt-1 text-xs text-slate-500">Estas líneas se seleccionaron durante la revisión de Mochilas o del pedido.</p>
+                    <p className="text-sm font-semibold text-slate-900">LÃ­neas marcadas en la consulta</p>
+                    <p className="mt-1 text-xs text-slate-500">Estas lÃ­neas se seleccionaron durante la revisiÃ³n de Mochilas o del pedido.</p>
                   </div>
                   <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
                     <table className="w-full text-sm">
                       <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                         <tr>
-                          <th className="px-3 py-2 font-semibold">Descripción</th>
+                          <th className="px-3 py-2 font-semibold">DescripciÃ³n</th>
                           <th className="px-3 py-2 font-semibold">ISBN</th>
                           <th className="px-3 py-2 font-semibold">Pedido</th>
                           <th className="px-3 py-2 font-semibold">Google</th>
-                          <th className="px-3 py-2 font-semibold">Código de libro</th>
+                          <th className="px-3 py-2 font-semibold">CÃ³digo de libro</th>
                           <th className="px-3 py-2 font-semibold">Acciones</th>
                         </tr>
                       </thead>
@@ -790,12 +771,12 @@ export default function TicketDetail() {
                                       key={action}
                                       className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
                                     >
-                                      {action === "return" ? "Devolución" : action === "missing_book" ? "No ve el libro" : safeDisplayText(action)}
+                                      {action === "return" ? "DevoluciÃ³n" : action === "missing_book" ? "No ve el libro" : safeDisplayText(action)}
                                     </span>
                                   ))
                                 ) : (
                                   <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-                                    Devolución
+                                    DevoluciÃ³n
                                   </span>
                                 )}
                               </div>
@@ -817,11 +798,11 @@ export default function TicketDetail() {
                     <table className="w-full text-sm">
                       <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                         <tr>
-                          <th className="px-3 py-2 font-semibold">Descripción</th>
+                          <th className="px-3 py-2 font-semibold">DescripciÃ³n</th>
                           <th className="px-3 py-2 font-semibold">ISBN</th>
                           <th className="px-3 py-2 font-semibold">Pedido</th>
                           <th className="px-3 py-2 font-semibold">Google</th>
-                          <th className="px-3 py-2 font-semibold">Código de libro</th>
+                          <th className="px-3 py-2 font-semibold">CÃ³digo de libro</th>
                           <th className="px-3 py-2 font-semibold">Token</th>
                         </tr>
                       </thead>
@@ -831,7 +812,7 @@ export default function TicketDetail() {
                             <td className="px-3 py-2 text-slate-900">{safeDisplayText(record?.description || "-")}</td>
                             <td className="px-3 py-2 text-slate-900">{safeDisplayText(record?.ean || "-")}</td>
                             <td className="px-3 py-2 text-slate-900">{safeDisplayText(record?.idOrder ?? "") || "-"}</td>
-                            <td className="px-3 py-2 text-slate-900">{record?.esGoogle ? "Sí" : "No"}</td>
+                            <td className="px-3 py-2 text-slate-900">{record?.esGoogle ? "SÃ­" : "No"}</td>
                             <td className="px-3 py-2 break-all text-slate-900">{safeDisplayText(record?.idConsignaOrder ?? "-")}</td>
                             <td className="px-3 py-2 break-all text-slate-900">{safeDisplayText(record?.token || "-")}</td>
                           </tr>
@@ -843,7 +824,7 @@ export default function TicketDetail() {
               )}
             </CardContent>
           </Card>
-          {/* Descripción original */}
+          {/* DescripciÃ³n original */}
           <Card className="shadow-sm">
             <CardContent className="pt-6">
               <div className="prose dark:prose-invert max-w-none whitespace-pre-wrap text-slate-700 dark:text-slate-300">
@@ -896,7 +877,7 @@ export default function TicketDetail() {
           <Card className={`shadow-sm border-2 ${isInternal ? 'border-amber-200 dark:border-amber-800/50 bg-amber-50/20' : 'border-primary/20 focus-within:border-primary'}`}>
             <CardContent className="p-4">
               <Textarea 
-                placeholder={isInternal ? "Escribe una nota interna (los clientes no la verán)..." : "Escribe una respuesta..."}
+                placeholder={isInternal ? "Escribe una nota interna (los clientes no la verÃ¡n)..." : "Escribe una respuesta..."}
                 className={`min-h-[120px] resize-y border-0 focus-visible:ring-0 p-0 shadow-none text-base bg-transparent ${isInternal ? 'placeholder:text-amber-700/40' : ''}`}
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
@@ -944,8 +925,8 @@ export default function TicketDetail() {
             </CardHeader>
             <CardContent className="p-4 pt-0 space-y-4">
               <div>
-                <div className="text-xs text-slate-500 mb-1">Categoría</div>
-                <div className="font-medium text-sm capitalize">{safeDisplayText(ticket.category || 'Sin categoría')}</div>
+                <div className="text-xs text-slate-500 mb-1">CategorÃ­a</div>
+                <div className="font-medium text-sm capitalize">{safeDisplayText(ticket.category || 'Sin categorÃ­a')}</div>
               </div>
               <div>
                 <div className="text-xs text-slate-500 mb-1">Asignado a</div>
@@ -1017,7 +998,7 @@ export default function TicketDetail() {
                 <Input id="ticket-student-email" value={editStudentEmail} onChange={(e) => setEditStudentEmail(e.target.value)} />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="ticket-category">Categoría</Label>
+                <Label htmlFor="ticket-category">CategorÃ­a</Label>
                 <Input id="ticket-category" value={editCategory} onChange={(e) => setEditCategory(e.target.value)} />
               </div>
             </div>
@@ -1038,7 +1019,7 @@ export default function TicketDetail() {
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="ticket-description">Descripción</Label>
+              <Label htmlFor="ticket-description">DescripciÃ³n</Label>
               <Textarea id="ticket-description" className="min-h-[180px]" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
             </div>
           </div>
@@ -1055,7 +1036,7 @@ export default function TicketDetail() {
           <DialogHeader>
             <DialogTitle>Mochila #{safeDisplayText(orderRecord?.idConsignaOrder ?? ticketOrderId)}</DialogTitle>
             <DialogDescription>
-              Registro: {safeDisplayText(orderRecord?.ean ?? "-")} · Pedido: {safeDisplayText(orderRecord?.idOrder ?? ticketOrderId)}
+              Registro: {safeDisplayText(orderRecord?.ean ?? "-")} Â· Pedido: {safeDisplayText(orderRecord?.idOrder ?? ticketOrderId)}
             </DialogDescription>
           </DialogHeader>
 
@@ -1063,7 +1044,7 @@ export default function TicketDetail() {
             <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
               <Card className="shadow-sm">
                 <CardHeader>
-                  <h3 className="text-lg font-semibold text-slate-900">Información del alumno</h3>
+                  <h3 className="text-lg font-semibold text-slate-900">InformaciÃ³n del alumno</h3>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -1095,7 +1076,7 @@ export default function TicketDetail() {
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-1">
-                      <Label>Contraseña</Label>
+                      <Label>ContraseÃ±a</Label>
                       <Input value={safeDisplayText(orderRecord.studentPassword ?? orderLookup?.studentPassword ?? "-")} readOnly />
                     </div>
                     <div className="flex items-center gap-3 pt-7">
@@ -1107,18 +1088,18 @@ export default function TicketDetail() {
                   <Separator />
 
                   <div className="space-y-1">
-                    <Label>Notas / Descripción</Label>
+                    <Label>Notas / DescripciÃ³n</Label>
                     <Textarea className="min-h-[110px]" value={safeDisplayText(orderRecord.description ?? "-")} readOnly />
                   </div>
 
                   {orderRecords.length > 1 && (
                     <div className="space-y-3">
-                      <h4 className="text-sm font-semibold text-slate-900">Líneas del pedido</h4>
+                      <h4 className="text-sm font-semibold text-slate-900">LÃ­neas del pedido</h4>
                       <div className="overflow-hidden rounded-lg border border-slate-200">
                         <table className="w-full text-sm">
                           <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                             <tr>
-                              <th className="px-3 py-2 font-semibold">Descripción</th>
+                              <th className="px-3 py-2 font-semibold">DescripciÃ³n</th>
                               <th className="px-3 py-2 font-semibold">EAN</th>
                               <th className="px-3 py-2 font-semibold">Token</th>
                               <th className="px-3 py-2 font-semibold">Tipo</th>
@@ -1210,7 +1191,7 @@ export default function TicketDetail() {
                     </Button>
                     <Button type="button" variant="outline" className="w-full gap-2" onClick={() => void handleOpenMeeResetPassword(orderRecord.token)}>
                       <KeyRound className="h-4 w-4" />
-                      Cambiar contraseña
+                      Cambiar contraseÃ±a
                     </Button>
                   </CardContent>
                 </Card>
@@ -1250,4 +1231,7 @@ export default function TicketDetail() {
     </div>
   );
 }
+
+
+
 

@@ -115,4 +115,4 @@ https://premac.starxia.com
 
 - `MOC_Mochilas` debe existir en la misma base MySQL del proyecto.
 - El frontend consume la API por `VITE_API_BASE_URL`; no debe depender de `localhost` en `pre`.
-- El codigo de Electron puede seguir existiendo en el repo, pero no forma parte del despliegue web normal en Ubuntu 24.04.
+- Este despliegue web en Ubuntu 24.04 no depende de componentes de escritorio ni de Electron.

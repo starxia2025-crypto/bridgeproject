@@ -416,7 +416,7 @@ export function MacmillanLayout({ children }: { children: React.ReactNode }) {
     { href: "/tickets", label: ticketsMenuLabel, icon: Ticket, roles: ["superadmin", "admin_cliente", "manager", "tecnico", "usuario_cliente", "visor_cliente"] },
     { href: "/assistance/request", label: "Solicitar asistencia", icon: ClipboardPlus, roles: ["admin_cliente", "manager", "usuario_cliente"] },
     { href: "/assistance/inbox", label: "Bandeja de asistencias", icon: CalendarClock, roles: ["superadmin", "tecnico"] },
-    { href: "/mochilas", label: mochilasMenuLabel, icon: LifeBuoy, roles: ["superadmin", "tecnico"], externalDesktopApp: true },
+    { href: "/mochilas", label: mochilasMenuLabel, icon: LifeBuoy, roles: ["superadmin", "tecnico"], externalWebNotice: true },
     { href: "/integrations/apis", label: "APIs externas", icon: Cable, roles: ["superadmin", "tecnico"] },
     { href: "/portal", label: "Centro de ayuda", icon: BookOpen, roles: ["superadmin", "admin_cliente", "manager", "tecnico", "usuario_cliente", "visor_cliente"] },
     { href: "/clients", label: "Colegios", icon: Building2, roles: ["superadmin", "tecnico"] },
@@ -429,29 +429,16 @@ export function MacmillanLayout({ children }: { children: React.ReactNode }) {
     <div className="flex w-full flex-col gap-1">
       {navItems.map((item) => {
         const Icon = item.icon;
-        const isExternalAction = item.externalDesktopApp;
+        const isExternalAction = item.externalWebNotice;
         const isActive = !isExternalAction && location.startsWith(item.href);
         const handleNavClick = async () => {
           if (!isExternalAction) return;
 
-          if (!window.desktopBridge?.openMochilasApp) {
-            toast({
-              title: "Disponible solo en escritorio",
-              description: "Consulta de Mochilas se abre desde la app de escritorio del tecnico.",
-              variant: "destructive",
-            });
-            return;
-          }
-
-          try {
-            await window.desktopBridge.openMochilasApp();
-          } catch (error) {
-            toast({
-              title: "No se pudo abrir Consulta de Mochilas",
-              description: error instanceof Error ? error.message : "Intentalo de nuevo.",
-              variant: "destructive",
-            });
-          }
+          toast({
+            title: "No disponible en la web",
+            description: "La consulta de Mochilas no esta disponible en esta version web.",
+            variant: "destructive",
+          });
         };
 
         if (isExternalAction) {
