@@ -327,9 +327,9 @@ export function MacmillanLayout({ children }: { children: React.ReactNode }) {
   const tenantConfig = user as any;
   const activeSchoolName = (user as any).schoolName || user.tenantName || "Macmillan Iberia";
   const activeSchoolLogo = typeof tenantConfig.tenantLogoUrl === "string" ? tenantConfig.tenantLogoUrl.trim() : "";
-  const brandTextColor = tenantConfig.tenantPrimaryColor || "#0f2f72";
-  const sidebarBackgroundColor = tenantConfig.tenantSidebarBackgroundColor || "#172b6a";
-  const sidebarTextColor = tenantConfig.tenantSidebarTextColor || "#f8fbff";
+  const brandTextColor = "#0f2f72";
+  const sidebarBackgroundColor = "#172b6a";
+  const sidebarTextColor = "#f8fbff";
   const tenantName = typeof tenantConfig.tenantName === "string" ? tenantConfig.tenantName.trim() : "";
   const isMacmillanSupportUser = user.role === "tecnico" && tenantName.toLowerCase().includes("macmillan");
   const ticketsMenuLabel =
