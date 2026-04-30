@@ -1,15 +1,26 @@
-import { defineConfig, loadEnv } from "vite";
+import { createLogger, defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
 const envDir = path.resolve(import.meta.dirname, "..", "..");
+const suppressedSourcemapWarning = "Error when using sourcemap for reporting an error";
 
 export default defineConfig(async ({ mode }) => {
   const env = loadEnv(mode, envDir, "");
   const rawPort = env.PORT || "4173";
   const port = Number(rawPort);
+  const viteLogger = createLogger();
+  const originalWarn = viteLogger.warn;
+
+  viteLogger.warn = (msg, options) => {
+    if (typeof msg === "string" && msg.includes(suppressedSourcemapWarning)) {
+      return;
+    }
+
+    originalWarn(msg, options);
+  };
 
   if (Number.isNaN(port) || port <= 0) {
     throw new Error(`Invalid PORT value: "${rawPort}"`);
@@ -45,9 +56,12 @@ export default defineConfig(async ({ mode }) => {
       dedupe: ["react", "react-dom"],
     },
     root: path.resolve(import.meta.dirname),
+    customLogger: viteLogger,
     build: {
       outDir: path.resolve(import.meta.dirname, "dist/public"),
       emptyOutDir: true,
+      sourcemap: false,
+      chunkSizeWarningLimit: 1500,
     },
     server: {
       port,
