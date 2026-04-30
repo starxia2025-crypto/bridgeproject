@@ -366,20 +366,13 @@ export default function AssistanceInboxPage() {
 
   return (
     <div className="space-y-8">
-      <section className="rounded-[2rem] border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-indigo-50/70 p-8 shadow-sm">
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-          <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-indigo-700">
-              <CalendarDays className="h-3.5 w-3.5" />
-              Bandeja de asistencias
-            </div>
-            <div>
-              <h1 className="text-4xl font-semibold tracking-tight text-slate-950">Bandeja de asistencias</h1>
-              <p className="mt-2 max-w-3xl text-base text-slate-600">
-                Revisa solicitudes pendientes, programa asistencias, asigna tecnico y mantén trazabilidad clara para el
-                equipo de soporte Macmillan.
-              </p>
-            </div>
+      <section className="space-y-6">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Bandeja de asistencias</h1>
+            <p className="mt-1 max-w-3xl text-slate-500">
+              Revisa solicitudes pendientes, programa asistencias, asigna tecnico y manten trazabilidad clara para el equipo de soporte Macmillan.
+            </p>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">

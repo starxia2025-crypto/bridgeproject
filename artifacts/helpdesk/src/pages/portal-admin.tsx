@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useGetMe, useListDocuments, useListTenants } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -310,7 +310,7 @@ export default function PortalAdmin() {
   }
 
   async function deleteDocument(documentId: number) {
-    if (!window.confirm("¿Eliminar este contenido del centro de ayuda?")) return;
+    if (!window.confirm("Â¿Eliminar este contenido del centro de ayuda?")) return;
     try {
       const response = await fetch(buildApiUrl(`/api/documents/${documentId}`), {
         method: "DELETE",
@@ -336,17 +336,12 @@ export default function PortalAdmin() {
 
   return (
     <div className="space-y-8">
-      <section className="space-y-5">
-        <div className="flex items-start gap-4">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-[#dfe8ff] via-[#eef3ff] to-white shadow-inner ring-1 ring-[#d7e3ff]">
-            <Book className="h-8 w-8 text-[#2952d6]" />
-          </div>
-          <div className="space-y-2">
-            <h1 className="text-3xl font-bold tracking-tight text-slate-950 md:text-4xl">Centro de ayuda Macmillan</h1>
-            <p className="max-w-4xl text-base leading-7 text-slate-600">
-              Consulta manuales de uso, videos explicativos, enlaces utiles, preguntas frecuentes y requisitos de acceso en un solo lugar.
-            </p>
-          </div>
+      <section className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Centro de ayuda Macmillan</h1>
+          <p className="mt-1 max-w-4xl text-slate-500">
+            Consulta manuales de uso, videos explicativos, enlaces utiles, preguntas frecuentes y requisitos de acceso en un solo lugar.
+          </p>
         </div>
 
         <Card className="overflow-hidden border-slate-200 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
@@ -703,7 +698,7 @@ export default function PortalAdmin() {
               <HelpCircle className="h-8 w-8" />
             </div>
             <div>
-              <h3 className="text-2xl font-semibold tracking-tight text-slate-950">¿No encuentras lo que buscas?</h3>
+              <h3 className="text-2xl font-semibold tracking-tight text-slate-950">Â¿No encuentras lo que buscas?</h3>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
                 Contacta con nuestro equipo de soporte tecnico y te ayudaremos a resolver cualquier duda sobre la plataforma o el acceso.
               </p>
@@ -718,3 +713,4 @@ export default function PortalAdmin() {
     </div>
   );
 }
+
