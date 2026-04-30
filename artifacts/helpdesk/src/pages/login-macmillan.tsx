@@ -1,4 +1,4 @@
-import { Link, useLocation } from "wouter";
+﻿import { Link, useLocation } from "wouter";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -17,19 +17,19 @@ import { toast } from "@/hooks/use-toast";
 import meeLogo from "@/assets/mee-logo.svg";
 
 const loginSchema = z.object({
-  email: z.string().email("Introduce un correo electr?nico v?lido"),
-  password: z.string().min(6, "La contrase?a debe tener al menos 6 caracteres"),
+  email: z.string().email("Introduce un correo electrónico válido"),
+  password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
   captchaAnswer: z.string().optional(),
   rememberMe: z.boolean(),
 });
 
 const supportContactSchema = z.object({
   name: z.string().trim().min(2, "Introduce tu nombre"),
-  email: z.string().trim().email("Introduce un correo v?lido"),
+  email: z.string().trim().email("Introduce un correo válido"),
   phone: z.string().trim().max(40).optional(),
   schoolName: z.string().trim().max(160).optional(),
   subject: z.string().trim().min(3, "Indica un asunto breve"),
-  message: z.string().trim().min(10, "Cu?ntanos brevemente qu? necesitas"),
+  message: z.string().trim().min(10, "Cuéntanos brevemente qué necesitas"),
 });
 
 const RECENT_LOGIN_EMAILS_STORAGE_KEY = "helpdesk-recent-login-emails";
@@ -46,28 +46,28 @@ const featureItems = [
   {
     icon: Headphones,
     title: "Soporte",
-    description: "Tickets de consultas,\natenci?n r?pida.",
+    description: "Tickets de consultas,\natención rápida.",
   },
   {
     icon: BookOpenText,
     title: "Recursos",
-    description: "Acceso a gu?as,\ndocumentaci?n y m?s",
+    description: "Acceso a guías,\ndocumentación y más",
   },
   {
     icon: UserRoundCheck,
     title: "Solicitud de\nasistencia",
-    description: "Planificaci?n y gesti?n\nde intervenciones",
+    description: "Planificación y gestión\nde intervenciones",
     glow: true,
   },
   {
     icon: GraduationCap,
-    title: "Formaci?n",
-    description: "Capacitaci?n y\ncontenidos formativos",
+    title: "Formación",
+    description: "Capacitación y\ncontenidos formativos",
   },
   {
     icon: PlugZap,
     title: "API externa",
-    description: "Conexi?n segura con\nnuestros sistemas",
+    description: "Conexión segura con\nnuestros sistemas",
   },
 ];
 
@@ -198,7 +198,7 @@ export default function MacmillanLogin() {
     onError: (error) => {
       toast({
         title: "No se pudo registrar la solicitud",
-        description: error instanceof Error ? error.message : "Int?ntalo de nuevo en unos minutos.",
+        description: error instanceof Error ? error.message : "Inténtalo de nuevo en unos minutos.",
         variant: "destructive",
       });
     },
@@ -242,14 +242,14 @@ export default function MacmillanLogin() {
       rawMessage.includes("429") ||
       rawMessage.toLowerCase().includes("credenciales")
     ) {
-      return "Credenciales no v?lidas";
+      return "Credenciales no válidas";
     }
 
     if (rawMessage.toLowerCase().includes("failed to fetch")) {
-      return "No se pudo conectar con el servidor. Int?ntalo de nuevo en unos segundos.";
+      return "No se pudo conectar con el servidor. Inténtalo de nuevo en unos segundos.";
     }
 
-    return "No se pudo iniciar sesi?n. Revisa tus datos e int?ntalo de nuevo.";
+    return "No se pudo iniciar sesión. Revisa tus datos e inténtalo de nuevo.";
   }
 
   function openSupportDialog() {
@@ -276,7 +276,7 @@ export default function MacmillanLogin() {
               <HeroWordmark />
 
               <p className="mt-10 max-w-[640px] text-[22px] leading-[1.55] text-white/92 sm:text-[24px] lg:text-[26px]">
-                Bridge te conecta con los equipos, servicios y soluciones de Macmillan Education, ofreciendo una experiencia unificada, ?gil y orientada al valor.
+                Bridge te conecta con los equipos, servicios y soluciones de Macmillan Education, ofreciendo una experiencia unificada, ágil y orientada al valor.
               </p>
             </div>
 
@@ -311,7 +311,7 @@ export default function MacmillanLogin() {
             <div className="w-full rounded-[28px] border border-white/75 bg-white/98 p-7 shadow-[0_28px_80px_-36px_rgba(4,10,31,0.72)] lg:p-8">
               <div className="text-center">
                 <h2 className="text-[42px] font-bold tracking-tight text-[#082c63] lg:text-[56px]">Bienvenido</h2>
-                <p className="mt-2 text-[16px] text-slate-600 lg:text-[18px]">Inicia sesi?n para continuar</p>
+                <p className="mt-2 text-[16px] text-slate-600 lg:text-[18px]">Inicia sesión para continuar</p>
               </div>
 
               <Form {...form}>
@@ -327,7 +327,7 @@ export default function MacmillanLogin() {
                     name="email"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-[15px] font-semibold text-[#082c63]">Correo electr?nico</FormLabel>
+                        <FormLabel className="text-[15px] font-semibold text-[#082c63]">Correo electrónico</FormLabel>
                         <FormControl>
                           <div className="relative">
                             <Mail className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
@@ -348,13 +348,13 @@ export default function MacmillanLogin() {
                     name="password"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-[15px] font-semibold text-[#082c63]">Contrase?a</FormLabel>
+                        <FormLabel className="text-[15px] font-semibold text-[#082c63]">Contraseña</FormLabel>
                         <FormControl>
                           <div className="relative">
                             <Lock className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
                             <Input
                               type={showPassword ? "text" : "password"}
-                              placeholder="??????????"
+                              placeholder="••••••••••"
                               {...field}
                               className="h-12 rounded-xl border-slate-200 pl-12 pr-12 text-[16px] text-slate-700 placeholder:text-slate-400"
                             />
@@ -362,7 +362,7 @@ export default function MacmillanLogin() {
                               type="button"
                               className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-600"
                               onClick={() => setShowPassword((current) => !current)}
-                              aria-label={showPassword ? "Ocultar contrase?a" : "Mostrar contrase?a"}
+                              aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                             >
                               {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                             </button>
@@ -379,7 +379,7 @@ export default function MacmillanLogin() {
                       name="captchaAnswer"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-[15px] font-semibold text-[#082c63]">Verificacion de seguridad</FormLabel>
+                          <FormLabel className="text-[15px] font-semibold text-[#082c63]">Verificación de seguridad</FormLabel>
                           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
                             <p className="mb-2 text-sm font-medium text-amber-900">
                               Resuelve para continuar: <span className="font-bold">{captchaChallenge.question}</span>
@@ -414,7 +414,7 @@ export default function MacmillanLogin() {
 
                     <Link href="/forgot-password">
                       <span className="cursor-pointer text-[14px] font-medium text-[#2563eb] hover:underline">
-                        Olvidaste tu contrase?a?
+                        ¿Olvidaste tu contraseña?
                       </span>
                     </Link>
                   </div>
@@ -427,10 +427,10 @@ export default function MacmillanLogin() {
                     {loginMutation.isPending ? (
                       <>
                         <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                        Iniciando sesi?n
+                        Iniciando sesión
                       </>
                     ) : (
-                      "Iniciar sesi?n"
+                      "Iniciar sesión"
                     )}
                   </Button>
 
@@ -441,7 +441,7 @@ export default function MacmillanLogin() {
                   </div>
 
                   <p className="pt-2 text-center text-[14px] leading-6 text-slate-700">
-                    ?Necesitas ayuda? Contacta con el{" "}
+                    ¿Necesitas ayuda? Contacta con el{" "}
                     <button
                       type="button"
                       className="font-medium text-[#2563eb] hover:underline"
@@ -486,7 +486,7 @@ export default function MacmillanLogin() {
             {supportSent ? (
               <div className="space-y-4">
                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-5 text-sm text-emerald-800">
-                  Tu solicitud se ha registrado correctamente en el sistema de soporte. El equipo la revisar? lo antes posible.
+                  Tu solicitud se ha registrado correctamente en el sistema de soporte. El equipo la revisará lo antes posible.
                 </div>
                 <DialogFooter>
                   <Button type="button" onClick={() => setSupportDialogOpen(false)}>
@@ -519,7 +519,7 @@ export default function MacmillanLogin() {
                       name="email"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Correo electr?nico</FormLabel>
+                          <FormLabel>Correo electrónico</FormLabel>
                           <FormControl>
                             <Input {...field} placeholder="tu@colegio.es" />
                           </FormControl>
@@ -535,7 +535,7 @@ export default function MacmillanLogin() {
                       name="phone"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Tel?fono</FormLabel>
+                          <FormLabel>Teléfono</FormLabel>
                           <FormControl>
                             <Input {...field} placeholder="Opcional" />
                           </FormControl>
@@ -614,3 +614,7 @@ export default function MacmillanLogin() {
     </div>
   );
 }
+
+
+
+
